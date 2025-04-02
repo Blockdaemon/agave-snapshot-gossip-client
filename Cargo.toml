@@ -1,0 +1,41 @@
+[package]
+name = "agave-snapshot-gossip-client"
+description = "Snapshot gossip client"
+authors = ["Blockdaemon", "Nye Liu"]
+version = "0.0.1"
+edition = "2021"
+repository = "https://github.com/Blockdaemon/agave-snapshot-gossip-client"
+license = "Apache-2.0"
+
+[[bin]]
+name = "snapshot-gossip-client"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+solana-gossip = "~2"
+solana-sdk = "~2"
+solana-streamer = "~2"
+solana-version = "~2"
+dns-lookup = "~2"
+easy-upnp = "*"
+jsonrpc-core = "~18"
+jsonrpc-http-server = "~18"
+lazy_static = "~1"
+serde = { version = "~1", features = ["derive"] }
+signal-hook = "*"
+stun-client = "*"
+tokio = { version = "~1", features = ["rt"] }
+toml = "*"
+
+[build-dependencies]
+anyhow = "*"
+vergen = { version = "*", features = ["build", "rustc"] }
+
+[package.metadata.docs.rs]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin"
+]

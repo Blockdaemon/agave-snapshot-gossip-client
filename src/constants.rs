@@ -1,0 +1,3 @@
+pub const DEFAULT_GOSSIP_PORT: u16 = 8001;
+pub const DEFAULT_RPC_PORT: u16 = 8899;
+pub const DEFAULT_STUN_PORT: u16 = 3478;
