@@ -20,7 +20,7 @@ If they are not, you will need UPNP support on your NAT router and you'll have t
 - `public_ip`: Autodetect with STUN
 - `stun_server`: `stun.l.google.com:3478`
 - `enable_upnp`: `false`
-- `storate_server`: None
+- `storage_server`: None
 
 ## Usage
 
