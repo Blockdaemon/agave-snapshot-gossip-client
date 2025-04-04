@@ -66,7 +66,7 @@ impl Config {
         SocketAddr::new(ip, port)
     }
 
-    pub fn get_external_ip_with_stun(&self) -> Result<IpAddr, std::io::Error> {
+    pub async fn get_external_ip_with_stun(&self) -> Result<IpAddr, std::io::Error> {
         let stun_server = self
             .stun_server
             .clone()
@@ -85,17 +85,17 @@ impl Config {
         let stun_server = format!("{}:{}", stun_host, stun_port);
         let mut stun_client = StunClient::new(stun_server);
 
-        stun_client.get_public_addr()
+        stun_client.get_public_addr().await
     }
 
-    pub fn resolve(&self) -> ResolvedConfig {
+    pub async fn resolve(&self) -> ResolvedConfig {
         // If no public_addr is supplied, use STUN
         let public_addr = match &self.public_addr {
             Some(addr) => addr.parse().unwrap(),
             None => {
-                println!("No public_addr in config, attempting to discover...");
-                if let Ok(addr) = self.get_external_ip_with_stun() {
-                    println!("  - Found external IP: {}", addr);
+                warn!("No public_addr in config, attempting to discover...");
+                if let Ok(addr) = self.get_external_ip_with_stun().await {
+                    warn!("Found external IP: {}", addr);
                     addr
                 } else {
                     panic!("Failed to discover public address and none configured in config.toml");

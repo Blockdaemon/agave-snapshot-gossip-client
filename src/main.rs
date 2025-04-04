@@ -112,7 +112,7 @@ async fn main() {
     });
     info!("Our pubkey: {}", node_keypair.pubkey());
 
-    let resolved = config.resolve();
+    let resolved = config.resolve().await;
     info!("Public address: {}", resolved.public_addr);
 
     if resolved.entrypoints.is_empty() {
@@ -148,12 +148,20 @@ async fn main() {
                 error!("Failed to install SIGTERM handler: {}", e);
                 std::process::exit(1);
             });
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .unwrap_or_else(|e| {
+                error!("Failed to install SIGINT handler: {}", e);
+                std::process::exit(1);
+            });
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
                 warn!("Received CTRL+C");
             }
             _ = sigterm.recv() => {
                 warn!("Received SIGTERM");
+            }
+            _ = sigint.recv() => {
+                warn!("Received SIGINT");
             }
         }
         e.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -234,4 +242,5 @@ async fn main() {
     info!("Gossip monitor shutdown complete");
 
     warn!("Shutting down...");
+    std::process::exit(0);
 }

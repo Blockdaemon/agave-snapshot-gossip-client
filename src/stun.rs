@@ -1,12 +1,11 @@
 use dns_lookup::lookup_host;
 use log::{error, info};
 use stun_client::*;
-use tokio::runtime::Runtime;
+use std::net::IpAddr;
 
 pub struct StunClient {
-    runtime: Runtime,
     stun_server: String,
-    cached_addr: Option<std::net::IpAddr>,
+    cached_addr: Option<IpAddr>,
 }
 
 impl StunClient {
@@ -29,16 +28,12 @@ impl StunClient {
         let resolved_server = format!("{}:{}", stun_ip, port);
 
         Self {
-            runtime: Runtime::new().unwrap_or_else(|e| {
-                error!("Failed to create Tokio runtime: {}", e);
-                std::process::exit(1);
-            }),
             stun_server: resolved_server,
             cached_addr: None,
         }
     }
 
-    async fn get_public_addr_with_stun(&self) -> Option<std::net::IpAddr> {
+    async fn get_public_addr_with_stun(&self) -> Option<IpAddr> {
         info!("Using STUN server: {}", self.stun_server);
         let mut client = Client::new("0.0.0.0:0", None).await.ok()?;
         let res = client.binding_request(&self.stun_server, None).await.ok()?;
@@ -49,20 +44,17 @@ impl StunClient {
         ip
     }
 
-    pub fn get_public_addr(&mut self) -> Result<std::net::IpAddr, std::io::Error> {
+    pub async fn get_public_addr(&mut self) -> Result<IpAddr, std::io::Error> {
         if let Some(ip) = self.cached_addr {
             return Ok(ip);
         }
 
-        let ip = self
-            .runtime
-            .block_on(self.get_public_addr_with_stun())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to get public address from STUN server",
-                )
-            })?;
+        let ip = self.get_public_addr_with_stun().await.ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to get public address from STUN server",
+            )
+        })?;
         self.cached_addr = Some(ip);
         Ok(ip)
     }
