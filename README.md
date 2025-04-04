@@ -57,3 +57,4 @@ The client will:
  [agave-snapshot-uploader issue #1](https://github.com/Blockdaemon/agave-snapshot-uploader/issues/1)
 - If the single entrypoint selected from `entrypoints` is no good, no other entrypoints will be tried. See
 [issue #2](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/2)
+- Importing the `solana_gossip` crate results in 900+ additional Solana rust dependencies. It isn't very modular.
