@@ -5,6 +5,7 @@ use jsonrpc_http_server::{
     RequestMiddlewareAction, ServerBuilder,
 };
 use lazy_static::lazy_static;
+use log::{error, info};
 use regex::Regex;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicI64;
@@ -43,7 +44,7 @@ impl RpcServer {
         let num_peers = self.num_peers.clone();
         let storage_server = self.storage_server.clone();
 
-        println!("Starting RPC server on {} with version {}", addr, version);
+        info!("Starting RPC server on {} with version {}", addr, version);
 
         // GetVersion
         io.add_method("getVersion", move |_params| {
@@ -101,11 +102,18 @@ impl RpcServer {
                 }
             })
             .start_http(&addr)
-            .expect("Failed to start RPC server")
+            .unwrap_or_else(|e| {
+                error!("Failed to start RPC server: {}", e);
+                std::process::exit(1);
+            })
     }
 }
 
 lazy_static! {
     static ref ARCHIVE_PATH: Regex =
-        Regex::new(r"^/(genesis|snapshot|incremental-snapshot).*\.tar\.(bz2|zst|gz)$").unwrap();
+        Regex::new(r"^/(genesis|snapshot|incremental-snapshot).*\.tar\.(bz2|zst|gz)$")
+            .unwrap_or_else(|e| {
+                error!("Failed to compile archive path regex: {}", e);
+                std::process::exit(1);
+            });
 }

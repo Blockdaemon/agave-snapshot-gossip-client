@@ -1,4 +1,5 @@
 use dns_lookup::lookup_host;
+use log::{error, info};
 use stun_client::*;
 use tokio::runtime::Runtime;
 
@@ -13,28 +14,37 @@ impl StunClient {
         // Resolve DNS if hostname is used
         let stun_host = stun_server.split(':').next().unwrap();
         let stun_ip = lookup_host(stun_host)
-            .expect("Failed to resolve STUN server hostname")
+            .unwrap_or_else(|e| {
+                error!("Failed to resolve STUN server hostname: {}", e);
+                std::process::exit(1);
+            })
             .into_iter()
             .find(|ip| ip.is_ipv4())
-            .expect("No IPv4 addresses found for STUN server");
+            .unwrap_or_else(|| {
+                error!("No IPv4 addresses found for STUN server");
+                std::process::exit(1);
+            });
 
         let port = stun_server.split(':').nth(1).unwrap();
         let resolved_server = format!("{}:{}", stun_ip, port);
 
         Self {
-            runtime: Runtime::new().expect("Failed to create Tokio runtime"),
+            runtime: Runtime::new().unwrap_or_else(|e| {
+                error!("Failed to create Tokio runtime: {}", e);
+                std::process::exit(1);
+            }),
             stun_server: resolved_server,
             cached_addr: None,
         }
     }
 
     async fn get_public_addr_with_stun(&self) -> Option<std::net::IpAddr> {
-        println!("Using STUN server: {}", self.stun_server);
+        info!("Using STUN server: {}", self.stun_server);
         let mut client = Client::new("0.0.0.0:0", None).await.ok()?;
         let res = client.binding_request(&self.stun_server, None).await.ok()?;
         let ip = Attribute::get_xor_mapped_address(&res).map(|addr| addr.ip());
         if let Some(ip) = ip {
-            println!("STUN detected public IP: {}", ip);
+            info!("STUN detected public IP: {}", ip);
         }
         ip
     }

@@ -1,4 +1,5 @@
 use easy_upnp::{add_ports, delete_ports, PortMappingProtocol, UpnpConfig};
+use log::{error, info};
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -17,7 +18,7 @@ pub fn make_upnp_config(port: u16) -> UpnpConfig {
 }
 
 pub fn setup_port_forwarding(ports: Vec<u16>) {
-    println!("Attempting UPnP port forwarding...");
+    info!("Attempting UPnP port forwarding...");
     let mut forwarded_ports = FORWARDED_PORTS.lock().unwrap();
 
     for port in ports {
@@ -25,17 +26,17 @@ pub fn setup_port_forwarding(ports: Vec<u16>) {
         for result in add_ports(vec![config]) {
             match result {
                 Ok(_) => {
-                    println!("  - Successfully forwarded UDP port {}", port);
+                    info!("  - Successfully forwarded UDP port {}", port);
                     forwarded_ports.insert(port);
                 }
-                Err(e) => println!("  - Failed to forward port: {}", e),
+                Err(e) => error!("  - Failed to forward port: {}", e),
             }
         }
     }
 }
 
 pub fn cleanup_port_forwarding() {
-    println!("Removing UPnP port forwarding...");
+    info!("Removing UPnP port forwarding...");
     let mut ports = FORWARDED_PORTS.lock().unwrap();
     let ports_to_remove: Vec<u16> = ports.iter().copied().collect();
     for port in ports_to_remove {
@@ -43,10 +44,10 @@ pub fn cleanup_port_forwarding() {
         for result in delete_ports(vec![config]) {
             match result {
                 Ok(_) => {
-                    println!("  - Successfully removed UDP port {}", port);
+                    info!("  - Successfully removed UDP port {}", port);
                     ports.remove(&port);
                 }
-                Err(e) => println!("  - Failed to remove port: {}", e),
+                Err(e) => error!("  - Failed to remove port: {}", e),
             }
         }
     }

@@ -1,6 +1,7 @@
 use crate::constants::{DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT};
 use crate::stun::StunClient;
 use dns_lookup::lookup_host;
+use log::{error, warn};
 use serde::Deserialize;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -37,15 +38,27 @@ impl Config {
         let parts: Vec<&str> = addr_str.split(':').collect();
         let (host, port) = match parts.len() {
             1 => (parts[0], default_port),
-            2 => (parts[0], parts[1].parse().expect("Invalid port")),
+            2 => (
+                parts[0],
+                parts[1].parse().unwrap_or_else(|e| {
+                    error!("Invalid port: {}", e);
+                    std::process::exit(1);
+                }),
+            ),
             _ => panic!("Invalid address format"),
         };
 
         let ip = lookup_host(host)
-            .expect("Failed to resolve hostname")
+            .unwrap_or_else(|e| {
+                error!("Failed to resolve hostname: {}", e);
+                std::process::exit(1);
+            })
             .into_iter()
             .next()
-            .expect("No IP addresses found");
+            .unwrap_or_else(|| {
+                error!("No IP addresses found");
+                std::process::exit(1);
+            });
 
         SocketAddr::new(ip, port)
     }
@@ -120,13 +133,15 @@ impl Config {
 pub fn load_config() -> Config {
     match fs::read_to_string("config.toml") {
         Ok(config_str) => {
-            let mut config: Config =
-                toml::from_str(&config_str).expect("Failed to parse config.toml");
+            let mut config: Config = toml::from_str(&config_str).unwrap_or_else(|e| {
+                error!("Failed to parse config.toml: {}", e);
+                std::process::exit(1);
+            });
             config.enable_upnp.get_or_insert(false);
             config
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            println!("No config.toml found, using defaults");
+            warn!("No config.toml found, using defaults");
             Config {
                 keypair_path: String::new(),
                 entrypoints: None,

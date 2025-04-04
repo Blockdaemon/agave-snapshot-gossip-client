@@ -4,6 +4,8 @@ mod rpc;
 mod stun;
 mod upnp;
 
+use env_logger;
+use log::{debug, error, info, warn};
 use rand;
 use rpc::RpcServer;
 use solana_gossip::cluster_info::ClusterInfo;
@@ -26,34 +28,43 @@ async fn monitor_gossip_service(
     exit: Arc<AtomicBool>,
     num_peers: Arc<AtomicI64>,
 ) {
-    println!("Monitoring gossip service");
+    warn!("Connecting to gossip...");
     let start = std::time::Instant::now();
     let mut last_peer_count = 0;
+    let mut connected = false;
     while !exit.load(std::sync::atomic::Ordering::SeqCst) {
         let peer_count = cluster_info.all_peers().len();
+        if peer_count > 1 && !connected {
+            connected = true;
+            warn!("Connected to gossip, {} peers", peer_count);
+        }
+
         if peer_count != last_peer_count {
             num_peers.store(
                 peer_count.try_into().unwrap(),
                 std::sync::atomic::Ordering::SeqCst,
             );
-            println!(
+            info!(
                 "Current peer count: {} (elapsed: {}s)",
                 peer_count,
                 start.elapsed().as_secs()
             );
             for (peer, _) in cluster_info.all_peers() {
-                println!(
+                debug!(
                     "    - Peer: {:?} {:?} {:?}",
                     peer.pubkey(),
                     peer.shred_version(),
-                    peer.gossip().expect("No gossip addr").ip(),
+                    peer.gossip().map_or_else(
+                        || { String::from("<no addr>") },
+                        |addr| addr.ip().to_string()
+                    ),
                 )
             }
             last_peer_count = peer_count;
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    println!("Monitoring gossip service complete");
+    info!("Monitoring gossip service exited");
 }
 
 async fn test_entrypoint_latency(addr: &SocketAddr) -> Option<Duration> {
@@ -87,25 +98,26 @@ async fn test_entrypoint_latency(addr: &SocketAddr) -> Option<Duration> {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
     let config = config::load_config();
     let node_keypair = read_keypair_file(&config.keypair_path).unwrap_or_else(|_err| {
-        println!("{} not found, generating new keypair", config.keypair_path);
+        warn!("{} not found, generating new keypair", config.keypair_path);
         Keypair::new()
     });
-    println!("Our pubkey: {}", node_keypair.pubkey());
+    info!("Our pubkey: {}", node_keypair.pubkey());
 
     let resolved = config.resolve();
-    println!("Public address: {}", resolved.public_addr);
+    info!("Public address: {}", resolved.public_addr);
 
     if resolved.entrypoints.is_empty() {
-        println!("No entrypoints configured!");
+        error!("No entrypoints configured!");
         return;
     }
 
     let exit = Arc::new(AtomicBool::new(false));
     let e = exit.clone();
 
-    println!("Selecting the best entrypoint");
+    info!("Selecting the best entrypoint");
     let best_entrypoint = if !resolved.entrypoints.is_empty() {
         let mut best = &resolved.entrypoints[0];
         let mut best_latency = Duration::MAX;
@@ -118,7 +130,7 @@ async fn main() {
                 }
             }
         }
-        println!("Best entrypoint: {} (latency: {:?})", best, best_latency);
+        info!("Best entrypoint: {} (latency: {:?})", best, best_latency);
         Some(best)
     } else {
         None
@@ -129,22 +141,25 @@ async fn main() {
         upnp::setup_port_forwarding(vec![DEFAULT_GOSSIP_PORT, resolved.rpc_listen.port()]);
     }
 
-    println!("Setting up signal handler");
+    info!("Setting up signal handler");
     let signal_handler = tokio::spawn(async move {
         let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("Failed to install SIGTERM handler");
+            .unwrap_or_else(|e| {
+                error!("Failed to install SIGTERM handler: {}", e);
+                std::process::exit(1);
+            });
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                println!("Received CTRL+C");
+                warn!("Received CTRL+C");
             }
             _ = sigterm.recv() => {
-                println!("Received SIGTERM");
+                warn!("Received SIGTERM");
             }
         }
         e.store(true, std::sync::atomic::Ordering::SeqCst);
     });
 
-    println!("Starting gossip service...");
+    info!("Starting gossip service...");
     // Start gossip service
     let gossip_addr = &SocketAddr::new(resolved.public_addr, DEFAULT_GOSSIP_PORT);
     let (gossip_service, _, cluster_info) = make_gossip_node(
@@ -156,7 +171,7 @@ async fn main() {
         true,
         SocketAddrSpace::Unspecified,
     );
-    println!("Started gossip service");
+    info!("Started gossip service");
 
     let slot = Arc::new(AtomicI64::new(0));
     let num_peers = Arc::new(AtomicI64::new(0));
@@ -168,7 +183,7 @@ async fn main() {
         resolved.storage_server,
     );
     let _rpc_server = rpc_server.start(resolved.rpc_listen);
-    println!("Started RPC server on {}", resolved.rpc_listen);
+    info!("Started RPC server on {}", resolved.rpc_listen);
 
     // Create a task for monitoring
     let monitor_handle = tokio::spawn({
@@ -180,27 +195,38 @@ async fn main() {
         }
     });
 
-    // Replace the ctrl_c().await with waiting for the signal handler
-    signal_handler.await.expect("Failed to join signal handler");
+    warn!("Ready to accept connections");
 
-    // Stop RPC server
-    println!("Stopping RPC server...");
-    thread::spawn(move || {
-        _rpc_server.close();
+    // Wait for signal or ctrl+c
+    signal_handler.await.unwrap_or_else(|e| {
+        error!("Failed to join signal handler: {}", e);
+        std::process::exit(1);
     });
-
-    println!("Signaling gossip service and monitor to exit");
-    // Signal exit to gossip service and monitor
-    exit.store(true, std::sync::atomic::Ordering::SeqCst);
-    // Join gossip service
-    gossip_service.join().unwrap();
-    println!("Gossip service shutdown complete");
-    // Wait for monitor to complete
-    monitor_handle.await.expect("Failed to join monitor task");
-    println!("Gossip monitor shutdown complete");
 
     // Clean up port forwarding if enabled
     if resolved.enable_upnp {
         upnp::cleanup_port_forwarding();
     }
+
+    // Stop RPC server
+    info!("Stopping RPC server...");
+    thread::spawn(move || {
+        _rpc_server.close();
+    });
+
+    info!("Signaling gossip service and monitor to exit");
+    // Signal exit to gossip service and monitor
+    exit.store(true, std::sync::atomic::Ordering::SeqCst);
+    // Join gossip service
+    gossip_service.join().unwrap();
+    info!("Gossip service shutdown complete");
+
+    // Wait for monitor to complete
+    monitor_handle.await.unwrap_or_else(|e| {
+        error!("Failed to join monitor task: {}", e);
+        std::process::exit(1);
+    });
+    info!("Gossip monitor shutdown complete");
+
+    warn!("Shutting down...");
 }
