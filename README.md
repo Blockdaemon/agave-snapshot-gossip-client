@@ -7,6 +7,8 @@ A lightweight client that participates in Solana's gossip network.
 - It listens on `rpc_listen` for `getSlot` `getVersion` and `getGenesisHash`.
 - If a `storage_server` is supplied, it redirects all genesis/snapshot HTTP GET requests there.
 
+![Alt text](./docs/SSDN-Architecture.svg)
+
 ## Configuration
 
 Create a `config.toml` file. All settings are optional and will use default values if not specified, or there is no `config.toml` file.
