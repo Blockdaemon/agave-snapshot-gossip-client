@@ -26,7 +26,7 @@ pub fn make_upnp_config((port, protocol): (u16, PortMappingProtocol)) -> UpnpCon
 }
 
 pub fn setup_port_forwarding(ports: Vec<(u16, PortMappingProtocol)>) {
-    info!("Attempting UPnP port forwarding...");
+    info!("Attempting UPnP port forwarding for {:?}...", ports);
     let mut forwarded_ports = FORWARDED_PORTS.lock().unwrap();
 
     for port_config in ports {
@@ -47,7 +47,6 @@ pub fn setup_port_forwarding(ports: Vec<(u16, PortMappingProtocol)>) {
 }
 
 pub fn cleanup_port_forwarding() {
-    info!("Removing UPnP port forwarding...");
     let mut ports = FORWARDED_PORTS.lock().unwrap();
     let ports_to_remove: Vec<_> = ports.iter().copied().collect();
     for port_key in ports_to_remove {
@@ -57,14 +56,18 @@ pub fn cleanup_port_forwarding() {
         } else {
             PortMappingProtocol::TCP
         };
+        info!(
+            "Removing UPnP port forwarding for {:?} {}...",
+            protocol, port
+        );
         let config = make_upnp_config((port, protocol));
         for result in delete_ports(vec![config]) {
             match result {
                 Ok(_) => {
-                    info!("  - Successfully removed {:?} port {}", protocol, port);
+                    info!("  - Successfully removed port {:?} {}", protocol, port);
                     ports.remove(&port_key);
                 }
-                Err(e) => error!("  - Failed to remove port: {}", e),
+                Err(e) => error!("  - Failed to remove port {:?} {}: {}", protocol, port, e),
             }
         }
     }

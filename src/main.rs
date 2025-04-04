@@ -190,6 +190,7 @@ async fn main() {
     );
     info!("Started gossip service");
 
+    info!("Starting RPC server on {}...", resolved.rpc_listen);
     let slot = Arc::new(AtomicI64::new(0));
     let num_peers = Arc::new(AtomicI64::new(0));
     let rpc_server = RpcServer::new(
@@ -200,8 +201,9 @@ async fn main() {
         resolved.storage_server,
     );
     let _rpc_server = rpc_server.start(resolved.rpc_listen);
-    info!("Started RPC server on {}", resolved.rpc_listen);
+    info!("Started RPC server");
 
+    info!("Starting monitor service...");
     // Create a task for monitoring
     let monitor_handle = tokio::spawn({
         let cluster_info = cluster_info.clone();
@@ -211,6 +213,7 @@ async fn main() {
             monitor_gossip_service(cluster_info, exit, num_peers).await;
         }
     });
+    info!("Started monitor service");
 
     warn!("Ready to accept connections");
 
