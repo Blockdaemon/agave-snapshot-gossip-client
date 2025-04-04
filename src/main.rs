@@ -4,6 +4,7 @@ mod rpc;
 mod stun;
 mod upnp;
 
+use easy_upnp::PortMappingProtocol;
 use env_logger;
 use log::{debug, error, info, warn};
 use rand;
@@ -169,7 +170,10 @@ async fn main() {
 
     // Try to set up UPnP port forwarding if enabled
     if resolved.enable_upnp {
-        upnp::setup_port_forwarding(vec![DEFAULT_GOSSIP_PORT, resolved.rpc_listen.port()]);
+        upnp::setup_port_forwarding(vec![
+            (DEFAULT_GOSSIP_PORT, PortMappingProtocol::UDP),
+            (resolved.rpc_listen.port(), PortMappingProtocol::TCP),
+        ]);
     }
 
     info!("Starting gossip service...");
