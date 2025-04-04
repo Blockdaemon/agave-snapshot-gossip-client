@@ -30,6 +30,7 @@ async fn monitor_gossip_service(
 ) {
     warn!("Connecting to gossip...");
     let start = std::time::Instant::now();
+    let mut max_peer_count = 1;
     let mut last_peer_count = 0;
     let mut connected = false;
     while !exit.load(std::sync::atomic::Ordering::SeqCst) {
@@ -44,7 +45,11 @@ async fn monitor_gossip_service(
                 peer_count.try_into().unwrap(),
                 std::sync::atomic::Ordering::SeqCst,
             );
-            info!(
+            last_peer_count = peer_count;
+        }
+
+        if peer_count > max_peer_count {
+            warn!(
                 "Current peer count: {} (elapsed: {}s)",
                 peer_count,
                 start.elapsed().as_secs()
@@ -60,8 +65,9 @@ async fn monitor_gossip_service(
                     ),
                 )
             }
-            last_peer_count = peer_count;
+            max_peer_count = peer_count;
         }
+
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     info!("Monitoring gossip service exited");
@@ -136,11 +142,6 @@ async fn main() {
         None
     };
 
-    // Try to set up UPnP port forwarding if enabled
-    if resolved.enable_upnp {
-        upnp::setup_port_forwarding(vec![DEFAULT_GOSSIP_PORT, resolved.rpc_listen.port()]);
-    }
-
     info!("Setting up signal handler");
     let signal_handler = tokio::spawn(async move {
         let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -194,6 +195,11 @@ async fn main() {
             monitor_gossip_service(cluster_info, exit, num_peers).await;
         }
     });
+
+    // Try to set up UPnP port forwarding if enabled
+    if resolved.enable_upnp {
+        upnp::setup_port_forwarding(vec![DEFAULT_GOSSIP_PORT, resolved.rpc_listen.port()]);
+    }
 
     warn!("Ready to accept connections");
 
