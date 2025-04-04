@@ -70,7 +70,7 @@ async fn monitor_gossip_service(
 
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    info!("Monitoring gossip service exited");
+    warn!("Monitoring gossip service exited");
 }
 
 async fn test_entrypoint_latency(addr: &SocketAddr) -> Option<Duration> {
@@ -120,9 +120,6 @@ async fn main() {
         return;
     }
 
-    let exit = Arc::new(AtomicBool::new(false));
-    let e = exit.clone();
-
     info!("Selecting the best entrypoint");
     let best_entrypoint = if !resolved.entrypoints.is_empty() {
         let mut best = &resolved.entrypoints[0];
@@ -143,6 +140,8 @@ async fn main() {
     };
 
     info!("Setting up signal handler");
+    let exit = Arc::new(AtomicBool::new(false));
+    let e = exit.clone();
     let signal_handler = tokio::spawn(async move {
         let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .unwrap_or_else(|e| {
