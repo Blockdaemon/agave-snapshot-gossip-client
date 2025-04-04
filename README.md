@@ -8,7 +8,7 @@ Create a `config.toml` file. All settings are optional and will use default valu
 
 See [example-config.toml](example-config.toml) for details.
 
-Note that `entrypoints` and `genesis_hash` are required.
+Note that `entrypoints`, `genesis_hash`, and `storage_server` are required.
 
 If you are behind a NAT or firewall, this will only work if the gossip and RPC ports are forwarded to you. 
 If they are not, you will need UPNP support on your NAT router and you'll have to `enable_upnp`.

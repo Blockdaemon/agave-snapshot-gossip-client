@@ -28,6 +28,7 @@ signal-hook = "*"
 stun-client = "*"
 tokio = { version = "~1", features = ["rt"] }
 toml = "*"
+regex = "~1"
 
 [build-dependencies]
 anyhow = "*"

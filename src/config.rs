@@ -14,7 +14,8 @@ pub struct Config {
     pub public_addr: Option<String>,
     pub enable_upnp: Option<bool>,
     pub rpc_listen: Option<String>,
-    pub genesis_hash: String, // required
+    pub genesis_hash: String,   // required
+    pub storage_server: String, // required
 }
 
 fn default_keypair_path() -> String {
@@ -28,6 +29,7 @@ pub struct ResolvedConfig {
     pub rpc_listen: SocketAddr,
     pub public_addr: IpAddr,
     pub enable_upnp: bool,
+    pub storage_server: String,
 }
 
 impl Config {
@@ -110,6 +112,7 @@ impl Config {
             rpc_listen,
             public_addr,
             enable_upnp,
+            storage_server: self.storage_server.clone(),
         }
     }
 }
@@ -132,6 +135,7 @@ pub fn load_config() -> Config {
                 enable_upnp: None,
                 rpc_listen: None,
                 genesis_hash: String::new(),
+                storage_server: String::new(),
             }
         }
         Err(e) => panic!("Error reading config.toml: {}", e),

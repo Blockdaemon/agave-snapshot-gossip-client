@@ -109,6 +109,7 @@ fn main() {
         resolved.genesis_hash,
         slot.clone(),
         num_peers.clone(),
+        resolved.storage_server,
     );
     let _rpc_server = rpc_server.start(resolved.rpc_listen);
     println!("Started RPC server on {}", resolved.rpc_listen);

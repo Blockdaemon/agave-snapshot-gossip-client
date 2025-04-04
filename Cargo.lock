@@ -123,6 +123,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-http-server",
  "lazy_static",
+ "regex",
  "serde",
  "signal-hook",
  "solana-gossip",
