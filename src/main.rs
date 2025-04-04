@@ -159,6 +159,11 @@ async fn main() {
         e.store(true, std::sync::atomic::Ordering::SeqCst);
     });
 
+    // Try to set up UPnP port forwarding if enabled
+    if resolved.enable_upnp {
+        upnp::setup_port_forwarding(vec![DEFAULT_GOSSIP_PORT, resolved.rpc_listen.port()]);
+    }
+
     info!("Starting gossip service...");
     // Start gossip service
     let gossip_addr = &SocketAddr::new(resolved.public_addr, DEFAULT_GOSSIP_PORT);
@@ -194,11 +199,6 @@ async fn main() {
             monitor_gossip_service(cluster_info, exit, num_peers).await;
         }
     });
-
-    // Try to set up UPnP port forwarding if enabled
-    if resolved.enable_upnp {
-        upnp::setup_port_forwarding(vec![DEFAULT_GOSSIP_PORT, resolved.rpc_listen.port()]);
-    }
 
     warn!("Ready to accept connections");
 

@@ -1,4 +1,7 @@
-use crate::constants::{DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT};
+use crate::constants::{
+    DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_TESTNET_ENTRYPOINTS,
+    DEFAULT_TESTNET_GENESIS_HASH,
+};
 use crate::stun::StunClient;
 use dns_lookup::lookup_host;
 use log::{error, warn};
@@ -15,8 +18,8 @@ pub struct Config {
     pub public_addr: Option<String>,
     pub enable_upnp: Option<bool>,
     pub rpc_listen: Option<String>,
-    pub genesis_hash: String,   // required
-    pub storage_server: String, // required
+    pub genesis_hash: Option<String>,
+    pub storage_server: Option<String>,
 }
 
 fn default_keypair_path() -> String {
@@ -104,7 +107,12 @@ impl Config {
         let entrypoints = self
             .entrypoints
             .clone()
-            .unwrap_or_default()
+            .unwrap_or_else(|| {
+                DEFAULT_TESTNET_ENTRYPOINTS
+                    .iter()
+                    .map(|&s| s.to_string())
+                    .collect()
+            })
             .into_iter()
             .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
             .collect();
@@ -121,11 +129,14 @@ impl Config {
 
         ResolvedConfig {
             entrypoints,
-            genesis_hash: self.genesis_hash.clone(),
+            genesis_hash: self
+                .genesis_hash
+                .clone()
+                .unwrap_or_else(|| DEFAULT_TESTNET_GENESIS_HASH.to_string()),
             rpc_listen,
             public_addr,
             enable_upnp,
-            storage_server: self.storage_server.clone(),
+            storage_server: self.storage_server.clone().unwrap_or_default(),
         }
     }
 }
@@ -149,8 +160,8 @@ pub fn load_config() -> Config {
                 public_addr: None,
                 enable_upnp: None,
                 rpc_listen: None,
-                genesis_hash: String::new(),
-                storage_server: String::new(),
+                genesis_hash: None,
+                storage_server: None,
             }
         }
         Err(e) => panic!("Error reading config.toml: {}", e),

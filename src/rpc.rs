@@ -70,8 +70,10 @@ impl RpcServer {
             )))
         });
 
-        ServerBuilder::new(io)
-            .request_middleware(move |request: Request<Body>| -> RequestMiddlewareAction {
+        let server = ServerBuilder::new(io);
+
+        let server = if !storage_server.is_empty() {
+            server.request_middleware(move |request: Request<Body>| -> RequestMiddlewareAction {
                 if request.method() == &Method::GET {
                     let path = request.uri().path();
                     if ARCHIVE_PATH.is_match(path) {
@@ -101,11 +103,14 @@ impl RpcServer {
                     should_continue_on_invalid_cors: true,
                 }
             })
-            .start_http(&addr)
-            .unwrap_or_else(|e| {
-                error!("Failed to start RPC server: {}", e);
-                std::process::exit(1);
-            })
+        } else {
+            server
+        };
+
+        server.start_http(&addr).unwrap_or_else(|e| {
+            error!("Failed to start RPC server: {}", e);
+            std::process::exit(1);
+        })
     }
 }
 

@@ -8,18 +8,19 @@ Create a `config.toml` file. All settings are optional and will use default valu
 
 See [example-config.toml](example-config.toml) for details.
 
-Note that `entrypoints`, `genesis_hash`, and `storage_server` are required.
-
 If you are behind a NAT or firewall, this will only work if the gossip and RPC ports are forwarded to you. 
 If they are not, you will need UPNP support on your NAT router and you'll have to `enable_upnp`.
 
 ### Default Values
 
+- `entrypoints`: Solana Testnet
+- `genesis_hash`: Solana Testnet
 - `keypair_path`: `keypair.json`
 - `rpc_listen`: `0.0.0.0:8899`
 - `public_ip`: Autodetect with STUN
 - `stun_server`: `stun.l.google.com:3478`
 - `enable_upnp`: `false`
+- `storate_server`: None
 
 ## Usage
 
@@ -30,7 +31,7 @@ solana-keygen new -o keypair.json
 
 2. Run the client:
 ```bash
-cargo run --bin snapshot-gossip-client
+RUST_LOG=warn cargo run --bin snapshot-gossip-client
 ```
 
 The client will:
