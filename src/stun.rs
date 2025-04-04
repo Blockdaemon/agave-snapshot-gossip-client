@@ -1,7 +1,7 @@
 use dns_lookup::lookup_host;
 use log::{error, info};
-use stun_client::*;
 use std::net::IpAddr;
+use stun_client::*;
 
 pub struct StunClient {
     stun_server: String,
