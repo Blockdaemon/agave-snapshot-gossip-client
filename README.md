@@ -15,8 +15,10 @@ Create a `config.toml` file. All settings are optional and will use default valu
 
 See [example-config.toml](example-config.toml) for details.
 
-If you are behind a NAT or firewall, this will only work if the gossip and RPC ports are forwarded to you. 
-If they are not, you will need UPNP support on your NAT router and you'll have to `enable_upnp`.
+If you are behind a NAT or firewall, this will only work if the gossip (UDP 8001) and RPC (TCP 8899) ports are forwarded to you by whoever is listening on `public_ip`.
+If traffic is not sent to you, and you use NAT, you will need UPNP support on your NAT router and you'll have to `enable_upnp`.
+
+Note that STUN is not recommended. You should likely provide your known `public_ip` explicitly.
 
 ### Default Values
 
