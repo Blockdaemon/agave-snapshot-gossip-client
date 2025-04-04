@@ -7,9 +7,9 @@ mod upnp;
 use easy_upnp::PortMappingProtocol;
 use env_logger;
 use log::{debug, error, info, warn};
-use rand;
 use rpc::RpcServer;
 use solana_gossip::cluster_info::ClusterInfo;
+use solana_gossip::contact_info::ContactInfo;
 use solana_gossip::gossip_service::make_gossip_node;
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
 use solana_streamer::socket::SocketAddrSpace;
@@ -20,7 +20,6 @@ use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use surge_ping::{Client as PingClient, Config as PingConfig, PingIdentifier};
 
 pub use constants::*; // Re-export the constants
 
@@ -74,35 +73,6 @@ async fn monitor_gossip_service(
     warn!("Monitoring gossip service exited");
 }
 
-async fn test_entrypoint_latency(addr: &SocketAddr) -> Option<Duration> {
-    let client = match PingClient::new(&PingConfig::default()) {
-        Ok(c) => c,
-        Err(_) => return None,
-    };
-
-    let mut pinger = client
-        .pinger(addr.ip(), PingIdentifier(rand::random()))
-        .await;
-    pinger.timeout(Duration::from_secs(1));
-
-    // Send 3 pings and take average
-    let mut total_rtt = Duration::ZERO;
-    let mut successful = 0;
-
-    for i in 0..3 {
-        if let Ok((_packet, rtt)) = pinger.ping(surge_ping::PingSequence(i), &[0; 0]).await {
-            total_rtt += rtt;
-            successful += 1;
-        }
-    }
-
-    if successful > 0 {
-        Some(total_rtt / successful)
-    } else {
-        None
-    }
-}
-
 #[tokio::main]
 async fn main() {
     env_logger::init();
@@ -120,25 +90,6 @@ async fn main() {
         error!("No entrypoints configured!");
         return;
     }
-
-    info!("Selecting the best entrypoint");
-    let best_entrypoint = if !resolved.entrypoints.is_empty() {
-        let mut best = &resolved.entrypoints[0];
-        let mut best_latency = Duration::MAX;
-
-        for entrypoint in &resolved.entrypoints {
-            if let Some(latency) = test_entrypoint_latency(entrypoint).await {
-                if latency < best_latency {
-                    best_latency = latency;
-                    best = entrypoint;
-                }
-            }
-        }
-        info!("Best entrypoint: {} (latency: {:?})", best, best_latency);
-        Some(best)
-    } else {
-        None
-    };
 
     info!("Setting up signal handler");
     let exit = Arc::new(AtomicBool::new(false));
@@ -181,15 +132,25 @@ async fn main() {
     let gossip_addr = &SocketAddr::new(resolved.public_addr, DEFAULT_GOSSIP_PORT);
     let (gossip_service, _, cluster_info) = make_gossip_node(
         node_keypair,
-        best_entrypoint,
+        Some(&resolved.entrypoints[0]),
         exit.clone(),
         Some(gossip_addr),
         0,
         true,
         SocketAddrSpace::Unspecified,
     );
+
+    cluster_info.set_entrypoints(
+        resolved
+            .entrypoints
+            .iter()
+            .map(|addr| ContactInfo::new_gossip_entry_point(addr))
+            .collect(),
+    );
+
     info!("Started gossip service");
 
+    info!("Starting RPC server on {}...", resolved.rpc_listen);
     let slot = Arc::new(AtomicI64::new(0));
     let num_peers = Arc::new(AtomicI64::new(0));
     let rpc_server = RpcServer::new(
@@ -200,8 +161,9 @@ async fn main() {
         resolved.storage_server,
     );
     let _rpc_server = rpc_server.start(resolved.rpc_listen);
-    info!("Started RPC server on {}", resolved.rpc_listen);
+    info!("Started RPC server");
 
+    info!("Starting monitor service...");
     // Create a task for monitoring
     let monitor_handle = tokio::spawn({
         let cluster_info = cluster_info.clone();
@@ -211,6 +173,7 @@ async fn main() {
             monitor_gossip_service(cluster_info, exit, num_peers).await;
         }
     });
+    info!("Started monitor service");
 
     warn!("Ready to accept connections");
 
