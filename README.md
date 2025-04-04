@@ -2,6 +2,11 @@
 
 A lightweight client that participates in Solana's gossip network.
 
+* The `public_ip` is reported to gossip, and is used as the P2P gossip listen point locally.
+* Its keypair is used to report the public key that can be used as a `known_validator` for the purposes of providing snapshots.
+* It listens on `rpc_listen` for `getSlot` `getVersion` and `getGenesisHash`.
+* If a `storage_server` is supplied, it redirects all genesis/snapshot HTTP GET requests there.
+
 ## Configuration
 
 Create a `config.toml` file. All settings are optional and will use default values if not specified, or there is no `config.toml` file.
