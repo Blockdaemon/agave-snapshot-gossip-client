@@ -2,10 +2,10 @@
 
 A lightweight client that participates in Solana's gossip network.
 
-* The `public_ip` is reported to gossip, and is used as the P2P gossip listen point locally.
-* Its keypair is used to report the public key that can be used as a `known_validator` for the purposes of providing snapshots.
-* It listens on `rpc_listen` for `getSlot` `getVersion` and `getGenesisHash`.
-* If a `storage_server` is supplied, it redirects all genesis/snapshot HTTP GET requests there.
+- The `public_ip` is reported to gossip, and is used as the P2P gossip listen point locally.
+- Its keypair is used to report the public key that can be used as a `known_validator` for the purposes of providing snapshots.
+- It listens on `rpc_listen` for `getSlot` `getVersion` and `getGenesisHash`.
+- If a `storage_server` is supplied, it redirects all genesis/snapshot HTTP GET requests there.
 
 ## Configuration
 
@@ -36,7 +36,7 @@ solana-keygen new -o keypair.json
 
 2. Run the client:
 ```bash
-RUST_LOG=warn cargo run --bin snapshot-gossip-client
+RUST_LOG=warn cargo run
 ```
 
 The client will:
@@ -44,3 +44,14 @@ The client will:
 - Use default values for any unspecified settings
 - Auto-detect public addresses using STUN if not configured
 - Generate a new keypair if none is found
+- Find the lowest latency entry point in `entrypoints`
+- Connect to the gossip cluster
+- Listen on `rpc_listen` for JSONRPC requests and GET requests if `storage_server` is defined
+
+## Bugs
+- `getSlot` currently always returns zero. See
+ [issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5)
+ and
+ [agave-snapshot-uploader issue #1](https://github.com/Blockdaemon/agave-snapshot-uploader/issues/1)
+- If the single entrypoint selected from `entrypoints` is no good, no other entrypoints will be tried. See
+[issue #2](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/2)
