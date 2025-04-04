@@ -12,7 +12,7 @@ lazy_static::lazy_static! {
 }
 
 /// Creates a unique key for a port and protocol combination.
-/// 
+///
 /// # Arguments
 /// * `port` - The port number (0-65535)
 /// * `protocol` - The protocol (UDP or TCP)
@@ -47,7 +47,7 @@ pub fn make_upnp_config((port, protocol): (u16, PortMappingProtocol)) -> UpnpCon
 }
 
 /// Sets up UPnP port forwarding for the specified ports.
-/// 
+///
 /// # Arguments
 /// * `ports` - A vector of (port, protocol) pairs to forward
 pub fn setup_port_forwarding(ports: Vec<(u16, PortMappingProtocol)>) {
@@ -62,7 +62,7 @@ pub fn setup_port_forwarding(ports: Vec<(u16, PortMappingProtocol)>) {
     for (port, protocol) in &ports {
         info!("Attempting to forward port {} ({:?})...", port, protocol);
         let config = make_upnp_config((*port, *protocol));
-        
+
         for result in add_ports(vec![config]) {
             match result {
                 Ok(_) => {
@@ -88,17 +88,23 @@ pub fn cleanup_port_forwarding() {
     let ports_to_remove: Vec<_> = ports.iter().copied().collect();
     for port_key in ports_to_remove {
         let (port, protocol) = decode_port_key(port_key);
-        info!("Removing port forwarding for port {} ({:?})...", port, protocol);
-        
+        info!(
+            "Removing port forwarding for port {} ({:?})...",
+            port, protocol
+        );
+
         let config = make_upnp_config((port, protocol));
         for result in delete_ports(vec![config]) {
             match result {
                 Ok(_) => {
-                    info!("Successfully removed port forwarding for port {} ({:?})", port, protocol);
+                    info!(
+                        "Successfully removed port forwarding for port {} ({:?})",
+                        port, protocol
+                    );
                     ports.remove(&port_key);
                 }
                 Err(e) => error!(
-                    "Failed to remove port forwarding for port {} ({:?}): {}", 
+                    "Failed to remove port forwarding for port {} ({:?}): {}",
                     port, protocol, e
                 ),
             }

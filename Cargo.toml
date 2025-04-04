@@ -25,12 +25,10 @@ jsonrpc-core = "~18"
 jsonrpc-http-server = "~18"
 lazy_static = "~1"
 log = "*"
-rand = "*"
 regex = "~1"
 serde = { version = "~1", features = ["derive"] }
 signal-hook = "*"
 stun-client = "*"
-surge-ping = "*"
 tokio = { version = "~1", features = ["rt"] }
 toml = "*"
 
