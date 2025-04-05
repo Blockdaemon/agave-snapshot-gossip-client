@@ -44,6 +44,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("No entrypoints configured".into());
     }
 
+    // Try to set up UPnP port forwarding BEFORE signal handler
+    if resolved.enable_upnp {
+        upnp::setup_port_forwarding(vec![
+            (DEFAULT_GOSSIP_PORT, PortMappingProtocol::UDP),
+            (resolved.rpc_listen.port(), PortMappingProtocol::TCP),
+        ]);
+    }
+
     info!("Setting up signal handler");
     let exit = Arc::new(AtomicBool::new(false));
     let e = exit.clone();
@@ -71,14 +79,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         e.store(true, std::sync::atomic::Ordering::SeqCst);
     });
-
-    // Try to set up UPnP port forwarding if enabled
-    if resolved.enable_upnp {
-        upnp::setup_port_forwarding(vec![
-            (DEFAULT_GOSSIP_PORT, PortMappingProtocol::UDP),
-            (resolved.rpc_listen.port(), PortMappingProtocol::TCP),
-        ]);
-    }
 
     info!("Starting gossip service...");
     // Start gossip service
