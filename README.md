@@ -1,62 +1,105 @@
 # Solana Snapshot Delivery Network (SSDN) Gossip Client
 
-A lightweight client that participates in Solana's gossip network.
+## Overview
 
-- The `public_ip` is reported to gossip, and is used as the P2P gossip listen point locally.
-- Its keypair is used to report the public key that can be used as a `known_validator` for the purposes of providing snapshots.
-- It listens on `rpc_listen` for `getSlot` `getVersion` and `getGenesisHash`.
-- If a `storage_server` is supplied, it redirects all genesis/snapshot HTTP GET requests there.
+The SSDN Gossip Client is part of a solution to decouple snapshot serving from validator operations in the Solana network. It enables scalable snapshot distribution without impacting validator performance.
 
-![Alt text](./docs/SSDN-Architecture.svg)
+## Problem Statement
+
+Current snapshot distribution has several limitations:
+- Existing validators and RPC providers are overwhelmed with snapshot requests, and they are limited in number due to the added performance overhead
+- Snapshot serving impacts critical validator operations
+- Snapshot serving impacts critical RPC provider operations
+- No scalability during high-demand periods (e.g., network restarts)
+- No dedicated infrastructure for snapshot distribution
+
+## Solution
+
+This project, along with [agave-snapshot-uploader](https://github.com/Blockdaemon/agave-snapshot-uploader), provides a scalable snapshot delivery network by:
+1. Decoupling snapshot distribution from validator/RPC operations
+2. Reusing the existing discovery mechanism for snapshot sources
+3. Maintaining compatibility with existing validator clients
+4. Supporting flexible deployment options
+
+### Key Features
+- Gossip network integration for discovery
+- Bare minimum required RPC endpoint compatibility (`getSlot`, `getVersion`, `getGenesisHash`)
+- STUN support for public IP detection
+- UPnP support for NAT traversal
+
+## Architecture
+
+The system supports three deployment models:
+
+1. **Independent Gossip Client**
+   - Separate gossip client
+   - Uploader sidecar on validator
+
+2. **Independent Client + Reverse Proxy**
+   - Separate gossip client
+   - Reverse proxy
+   - Uploader sidecar on validator
+
+3. **Consolidated Setup**
+   - All components on single host
+   - Reverse proxy
+   - Uploader sidecar
+
+![Architecture Diagram](./docs/SSDN-Architecture.svg)
 
 ## Configuration
 
-Create a `config.toml` file. All settings are optional and will use default values if not specified, or there is no `config.toml` file.
+### Quick Start
 
-See [example-config.toml](example-config.toml) for details.
+1. Generate a keypair (if needed):
+   ```bash
+   solana-keygen new -o keypair.json
+   ```
 
-If you are behind a NAT or firewall, this will only work if the gossip (UDP 8001) and RPC (TCP 8899) ports are forwarded to you by whoever is listening on `public_ip`.
-If traffic is not sent to you, and you use NAT, you will need UPNP support on your NAT router and you'll have to `enable_upnp`.
+2. Create a `config.toml` file (optional, see [example-config.toml](example-config.toml))
 
-Note that STUN is not recommended. You should likely provide your known `public_ip` explicitly.
+3. Run the client:
+   ```bash
+   RUST_LOG=warn cargo run
+   ```
 
-### Default Values
+### Configuration Options
 
-- `entrypoints`: Solana Testnet
-- `genesis_hash`: Solana Testnet
-- `keypair_path`: `keypair.json`
-- `rpc_listen`: `0.0.0.0:8899`
-- `public_ip`: Autodetect with STUN
-- `stun_server`: `stun.l.google.com:3478`
-- `enable_upnp`: `false`
-- `storage_server`: None
+| Option | Default | Description |
+|--------|---------|-------------|
+| `entrypoints` | Testnet | Gossip network entry points |
+| `genesis_hash` | Testnet | Genesis hash |
+| `keypair_path` | `keypair.json` | Path to keypair file |
+| `rpc_listen` | `0.0.0.0:8899` | RPC listen address |
+| `public_ip` | Auto (STUN), port `8001` | Public IP address |
+| `stun_server` | `stun.l.google.com:3478` | STUN server address |
+| `enable_upnp` | `false` | Enable UPnP port forwarding |
+| `storage_server` | None | Storage server URL |
 
-## Usage
+### Network Requirements
 
-1. Generate a keypair using `solana-keygen` if you do not have one already:
-```bash
-solana-keygen new -o keypair.json
-```
+- For NAT/firewall setups:
+  - UDP port 8001 (gossip)
+  - TCP port 8899 (RPC)
+  - Either:
+    - Port forwarding configured for these ports
+    - UPnP enabled on router (and `enable_upnp = true` locally)
 
-2. Run the client:
-```bash
-RUST_LOG=warn cargo run
-```
+**Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
 
-The client will:
-- Load configuration from `config.toml` if present
-- Use default values for any unspecified settings
-- Auto-detect public addresses using STUN if not configured
-- Generate a new keypair if none is found
-- Find the lowest latency entry point in `entrypoints`
-- Connect to the gossip cluster
-- Listen on `rpc_listen` for JSONRPC requests and GET requests if `storage_server` is defined
+## Benefit/Limitation Tradeoffs
 
-## Bugs
-- `getSlot` currently always returns zero. See
- [issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5)
- and
- [agave-snapshot-uploader issue #1](https://github.com/Blockdaemon/agave-snapshot-uploader/issues/1)
-- If the single entrypoint selected from `entrypoints` is no good, no other entrypoints will be tried. See
-[issue #2](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/2)
-- Importing the `solana_gossip` crate results in 900+ additional Solana rust dependencies. It isn't very modular.
+For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
+
+## Known Issues
+   - `getSlot` returns zero ([issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5))
+   - Single entrypoint limitation ([issue #2](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/2))
+   - Large dependency footprint from `solana_gossip`
+
+## Contributing
+
+Issues and pull requests are welcome. For major changes, please open an issue first to discuss the proposed changes.
+
+## License
+
+[Apache 2.0](LICENSE)
