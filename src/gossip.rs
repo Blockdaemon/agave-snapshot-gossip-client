@@ -36,9 +36,11 @@ pub fn make_gossip_node(
     let cluster_info = ClusterInfo::new(node, Arc::new(keypair), socket_addr_space);
 
     // Add all entrypoints to the cluster info
-    for entrypoint in entrypoints {
-        cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(&entrypoint));
-    }
+    cluster_info.set_entrypoints(
+        entrypoints.iter()
+            .map(|addr| ContactInfo::new_gossip_entry_point(addr))
+            .collect()
+    );
 
     let cluster_info = Arc::new(cluster_info);
     let gossip_service = GossipService::new(
