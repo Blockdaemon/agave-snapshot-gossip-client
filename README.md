@@ -93,7 +93,6 @@ For a detailed analysis of the benefits, limitations, and production considerati
 
 ## Known Issues
    - `getSlot` returns zero ([issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5))
-   - Single entrypoint limitation ([issue #2](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/2))
    - Large dependency footprint from `solana_gossip`
 
 ## Contributing
