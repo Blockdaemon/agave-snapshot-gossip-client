@@ -8,6 +8,23 @@ pub struct StunClient {
     cached_addr: Option<IpAddr>,
 }
 
+#[derive(Debug)]
+pub enum StunError {
+    ClientCreation(String),
+    BindingRequest(String),
+    AddressExtraction(String),
+}
+
+impl std::fmt::Display for StunError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            StunError::ClientCreation(e) => write!(f, "Client creation failed: {}", e),
+            StunError::BindingRequest(e) => write!(f, "Binding request failed: {}", e),
+            StunError::AddressExtraction(e) => write!(f, "Address extraction failed: {}", e),
+        }
+    }
+}
+
 impl StunClient {
     pub fn new(stun_server: String) -> Self {
         // Resolve DNS if hostname is used
@@ -33,29 +50,32 @@ impl StunClient {
         }
     }
 
-    async fn get_public_addr_with_stun(&self) -> Option<IpAddr> {
+    pub async fn get_public_ip(&mut self, no_cache: bool) -> Result<IpAddr, StunError> {
+        if !no_cache && self.cached_addr.is_some() {
+            if let Some(ip) = self.cached_addr {
+                info!("Using cached public IP: {}", ip);
+                return Ok(ip);
+            }
+        }
+
         info!("Using STUN server: {}", self.stun_server);
-        let mut client = Client::new("0.0.0.0:0", None).await.ok()?;
-        let res = client.binding_request(&self.stun_server, None).await.ok()?;
-        let ip = Attribute::get_xor_mapped_address(&res).map(|addr| addr.ip());
-        if let Some(ip) = ip {
-            info!("STUN detected public IP: {}", ip);
-        }
-        ip
-    }
+        let mut client = Client::new("0.0.0.0:0", None)
+            .await
+            .map_err(|e| StunError::ClientCreation(e.to_string()))?;
 
-    pub async fn get_public_addr(&mut self) -> Result<IpAddr, std::io::Error> {
-        if let Some(ip) = self.cached_addr {
-            return Ok(ip);
-        }
+        let res = client
+            .binding_request(&self.stun_server, None)
+            .await
+            .map_err(|e| StunError::BindingRequest(e.to_string()))?;
 
-        let ip = self.get_public_addr_with_stun().await.ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to get public address from STUN server",
-            )
-        })?;
-        self.cached_addr = Some(ip);
+        let addr = Attribute::get_xor_mapped_address(&res)
+            .ok_or_else(|| StunError::AddressExtraction("No XOR mapped address found".into()))?;
+
+        let ip = addr.ip();
+        if !no_cache {
+            self.cached_addr = Some(ip);
+        }
+        info!("STUN detected public IP: {}", ip);
         Ok(ip)
     }
 }

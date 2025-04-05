@@ -22,21 +22,26 @@ use std::thread;
 pub use constants::*; // Re-export the constants
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let config = config::load_config();
-    let node_keypair = read_keypair_file(&config.keypair_path).unwrap_or_else(|_err| {
-        warn!("{} not found, generating new keypair", config.keypair_path);
+    let node_keypair = read_keypair_file(&config.keypair_path).unwrap_or_else(|err| {
+        warn!(
+            "{} not found, generating new keypair: {}",
+            config.keypair_path, err
+        );
         Keypair::new()
     });
     info!("Our pubkey: {}", node_keypair.pubkey());
 
-    let resolved = config.resolve().await;
+    let resolved = config.resolve().await.map_err(|e| {
+        error!("Failed to resolve configuration: {:?}", e);
+        e
+    })?;
     info!("Public address: {}", resolved.public_addr);
 
     if resolved.entrypoints.is_empty() {
-        error!("No entrypoints configured!");
-        return;
+        return Err("No entrypoints configured".into());
     }
 
     info!("Setting up signal handler");

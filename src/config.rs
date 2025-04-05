@@ -2,7 +2,7 @@ use crate::constants::{
     DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_TESTNET_ENTRYPOINTS,
     DEFAULT_TESTNET_GENESIS_HASH,
 };
-use crate::stun::StunClient;
+use crate::stun::{StunClient, StunError};
 use dns_lookup::lookup_host;
 use log::{error, warn};
 use serde::Deserialize;
@@ -36,43 +36,56 @@ pub struct ResolvedConfig {
     pub storage_server: String,
 }
 
+#[derive(Debug)]
+pub enum ConfigError {
+    StunError(StunError),
+    InvalidAddress(String),
+    DnsLookupError(String),
+    ParseError(String),
+}
+
+impl std::error::Error for ConfigError {}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ConfigError::StunError(e) => write!(f, "STUN error: {}", e),
+            ConfigError::InvalidAddress(e) => write!(f, "Invalid address: {}", e),
+            ConfigError::DnsLookupError(e) => write!(f, "DNS lookup error: {}", e),
+            ConfigError::ParseError(e) => write!(f, "Parse error: {}", e),
+        }
+    }
+}
+
 impl Config {
-    fn parse_addr(addr_str: &str, default_port: u16) -> SocketAddr {
+    fn parse_addr(addr_str: &str, default_port: u16) -> Result<SocketAddr, ConfigError> {
         let parts: Vec<&str> = addr_str.split(':').collect();
         let (host, port) = match parts.len() {
             1 => (parts[0], default_port),
             2 => (
                 parts[0],
-                parts[1].parse().unwrap_or_else(|e| {
-                    error!("Invalid port: {}", e);
-                    std::process::exit(1);
-                }),
+                parts[1]
+                    .parse()
+                    .map_err(|e| ConfigError::ParseError(format!("Invalid port: {}", e)))?,
             ),
-            _ => panic!("Invalid address format"),
+            _ => return Err(ConfigError::InvalidAddress("Invalid address format".into())),
         };
 
         let ip = lookup_host(host)
-            .unwrap_or_else(|e| {
-                error!("Failed to resolve hostname: {}", e);
-                std::process::exit(1);
-            })
+            .map_err(|e| ConfigError::DnsLookupError(e.to_string()))?
             .into_iter()
             .next()
-            .unwrap_or_else(|| {
-                error!("No IP addresses found");
-                std::process::exit(1);
-            });
+            .ok_or_else(|| ConfigError::DnsLookupError("No IP addresses found".into()))?;
 
-        SocketAddr::new(ip, port)
+        Ok(SocketAddr::new(ip, port))
     }
 
-    pub async fn get_external_ip_with_stun(&self) -> Result<IpAddr, std::io::Error> {
+    pub async fn get_external_ip_with_stun(&self) -> Result<IpAddr, StunError> {
         let stun_server = self
             .stun_server
             .clone()
             .unwrap_or_else(|| "stun.l.google.com".to_string());
 
-        // Extract or use default port
         let stun_port = if stun_server.contains(':') {
             let parts: Vec<&str> = stun_server.split(':').collect();
             parts[1].parse().unwrap_or(DEFAULT_STUN_PORT)
@@ -80,30 +93,26 @@ impl Config {
             DEFAULT_STUN_PORT
         };
 
-        // Get host without port
         let stun_host = stun_server.split(':').next().unwrap();
         let stun_server = format!("{}:{}", stun_host, stun_port);
         let mut stun_client = StunClient::new(stun_server);
 
-        stun_client.get_public_addr().await
+        stun_client.get_public_ip(false).await
     }
 
-    pub async fn resolve(&self) -> ResolvedConfig {
-        // If no public_addr is supplied, use STUN
+    pub async fn resolve(&self) -> Result<ResolvedConfig, ConfigError> {
         let public_addr = match &self.public_addr {
-            Some(addr) => addr.parse().unwrap(),
+            Some(addr) => addr
+                .parse()
+                .map_err(|e| ConfigError::ParseError(format!("Invalid public address: {}", e)))?,
             None => {
                 warn!("No public_addr in config, attempting to discover...");
-                if let Ok(addr) = self.get_external_ip_with_stun().await {
-                    warn!("Found external IP: {}", addr);
-                    addr
-                } else {
-                    panic!("Failed to discover public address and none configured in config.toml");
-                }
+                self.get_external_ip_with_stun()
+                    .await
+                    .map_err(ConfigError::StunError)?
             }
         };
 
-        // Resolve entrypoint hostnames to IPs
         let entrypoints = self
             .entrypoints
             .clone()
@@ -115,7 +124,7 @@ impl Config {
             })
             .into_iter()
             .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         let enable_upnp = self.enable_upnp.unwrap_or(false);
 
@@ -124,10 +133,13 @@ impl Config {
             .as_ref()
             .map(|addr| Self::parse_addr(addr, DEFAULT_RPC_PORT))
             .unwrap_or_else(|| {
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_RPC_PORT)
-            });
+                Ok(SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                    DEFAULT_RPC_PORT,
+                ))
+            })?;
 
-        ResolvedConfig {
+        Ok(ResolvedConfig {
             entrypoints,
             genesis_hash: self
                 .genesis_hash
@@ -137,7 +149,7 @@ impl Config {
             public_addr,
             enable_upnp,
             storage_server: self.storage_server.clone().unwrap_or_default(),
-        }
+        })
     }
 }
 
