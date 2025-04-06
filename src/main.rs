@@ -21,6 +21,34 @@ use std::thread;
 
 pub use constants::*; // Re-export the constants
 
+async fn setup_signal_handler(exit: Arc<AtomicBool>) -> Result<(), tokio::task::JoinError> {
+    tokio::spawn(async move {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .unwrap_or_else(|e| {
+                error!("Failed to install SIGTERM handler: {}", e);
+                std::process::exit(1);
+            });
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .unwrap_or_else(|e| {
+                error!("Failed to install SIGINT handler: {}", e);
+                std::process::exit(1);
+            });
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                warn!("Received CTRL+C");
+            }
+            _ = sigterm.recv() => {
+                warn!("Received SIGTERM");
+            }
+            _ = sigint.recv() => {
+                warn!("Received SIGINT");
+            }
+        }
+        exit.store(true, std::sync::atomic::Ordering::SeqCst);
+    })
+    .await
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
@@ -52,33 +80,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ]);
     }
 
-    info!("Setting up signal handler");
+    // We make 3 exit clones, one for the signal handler, one for the gossip service, and one for the monitor
     let exit = Arc::new(AtomicBool::new(false));
-    let e = exit.clone();
-    let signal_handler = tokio::spawn(async move {
-        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .unwrap_or_else(|e| {
-                error!("Failed to install SIGTERM handler: {}", e);
-                std::process::exit(1);
-            });
-        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-            .unwrap_or_else(|e| {
-                error!("Failed to install SIGINT handler: {}", e);
-                std::process::exit(1);
-            });
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {
-                warn!("Received CTRL+C");
-            }
-            _ = sigterm.recv() => {
-                warn!("Received SIGTERM");
-            }
-            _ = sigint.recv() => {
-                warn!("Received SIGINT");
-            }
-        }
-        e.store(true, std::sync::atomic::Ordering::SeqCst);
-    });
+
+    info!("Setting up signal handler");
+    let signal_handler = setup_signal_handler(exit.clone()); // clone #1
 
     info!("Starting gossip service...");
     // Start gossip service
@@ -87,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (gossip_service, _, cluster_info) = make_gossip_node(
         node_keypair,
         resolved.entrypoints,
-        exit.clone(),
+        exit.clone(), // clone #2
         Some(gossip_addr),
         Some(rpc_addr),
         0,
@@ -100,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let num_peers = Arc::new(AtomicI64::new(0));
     let monitor_handle = tokio::spawn({
         let cluster_info = cluster_info.clone();
-        let exit = exit.clone();
+        let exit = exit.clone(); // clone #3
         let num_peers = num_peers.clone();
         async move {
             gossip::monitor_gossip_service(cluster_info, exit, num_peers).await;
