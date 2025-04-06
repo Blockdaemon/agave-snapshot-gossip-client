@@ -1,7 +1,29 @@
 use easy_upnp::{add_ports, delete_ports, PortMappingProtocol, UpnpConfig};
-use log::{error, info};
+use log::{error, info, warn};
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt;
 use std::sync::Mutex;
+
+#[derive(Debug)]
+pub struct UpnpError {
+    errors: Vec<Box<dyn Error + Send + Sync>>,
+}
+
+impl UpnpError {
+    fn new(errors: Vec<Box<dyn Error + Send + Sync>>) -> Self {
+        Self { errors }
+    }
+}
+
+impl fmt::Display for UpnpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let messages: Vec<_> = self.errors.iter().map(|e| e.to_string()).collect();
+        write!(f, "{}", messages.join("; "))
+    }
+}
+
+impl Error for UpnpError {}
 
 /// A composite key that uniquely identifies a port forwarding entry.
 /// The lower 16 bits represent the port number, and bit 16 represents the protocol (0 for UDP, 1 for TCP).
@@ -50,28 +72,51 @@ pub fn make_upnp_config((port, protocol): (u16, PortMappingProtocol)) -> UpnpCon
 ///
 /// # Arguments
 /// * `ports` - A vector of (port, protocol) pairs to forward
-pub fn setup_port_forwarding(ports: Vec<(u16, PortMappingProtocol)>) {
+pub fn setup_port_forwarding(ports: Vec<(u16, PortMappingProtocol)>) -> Result<(), UpnpError> {
     let mut forwarded_ports = match FORWARDED_PORTS.lock() {
         Ok(guard) => guard,
         Err(e) => {
             error!("Failed to acquire lock for port forwarding: {}", e);
-            return;
+            return Err(UpnpError::new(vec![Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to acquire lock: {}", e),
+            ))
+                as Box<dyn Error + Send + Sync>]));
         }
     };
 
+    let mut errors = Vec::new();
     for (port, protocol) in &ports {
         info!("Attempting to forward port {} ({:?})...", port, protocol);
         let config = make_upnp_config((*port, *protocol));
 
+        let mut port_errors = Vec::new();
         for result in add_ports(vec![config]) {
             match result {
                 Ok(_) => {
                     info!("Successfully forwarded port {} ({:?})", port, protocol);
                     forwarded_ports.insert(make_port_key(*port, protocol));
+                    break;
                 }
-                Err(e) => error!("Failed to forward port {} ({:?}): {}", port, protocol, e),
+                Err(e) => {
+                    warn!("Failed to forward port {} ({:?}): {}", port, protocol, e);
+                    port_errors.push(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Port {} ({:?}): {}", port, protocol, e),
+                    )) as Box<dyn Error + Send + Sync>);
+                }
             }
         }
+
+        if !port_errors.is_empty() {
+            errors.push(Box::new(UpnpError::new(port_errors)) as Box<dyn Error + Send + Sync>);
+        }
+    }
+
+    if !errors.is_empty() {
+        Err(UpnpError::new(errors))
+    } else {
+        Ok(())
     }
 }
 

@@ -74,10 +74,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Try to set up UPnP port forwarding BEFORE signal handler
     if resolved.enable_upnp {
-        upnp::setup_port_forwarding(vec![
+        if let Err(e) = upnp::setup_port_forwarding(vec![
             (DEFAULT_GOSSIP_PORT, PortMappingProtocol::UDP),
             (resolved.rpc_listen.port(), PortMappingProtocol::TCP),
-        ]);
+        ]) {
+            error!("Failed to set up UPnP port forwarding: {}", e);
+        }
     }
 
     // We make 3 exit clones, one for the signal handler, one for the gossip service, and one for the monitor
@@ -89,7 +91,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start gossip service
     let gossip_addr = &SocketAddr::new(resolved.public_addr, DEFAULT_GOSSIP_PORT);
     let rpc_addr = &SocketAddr::new(resolved.public_addr, resolved.rpc_listen.port());
-    info!("Starting gossip service, reporting {:?} and {:?}...", gossip_addr, rpc_addr);
+    info!(
+        "Starting gossip service, reporting {:?} and {:?}...",
+        gossip_addr, rpc_addr
+    );
     let (gossip_service, _, cluster_info) = make_gossip_node(
         node_keypair,
         resolved.entrypoints,
