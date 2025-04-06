@@ -110,5 +110,5 @@ pub async fn monitor_gossip_service(
 
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    warn!("Monitoring gossip service exited");
+    info!("Gossip monitor service exited");
 }
