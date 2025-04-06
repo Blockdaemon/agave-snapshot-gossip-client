@@ -40,7 +40,8 @@ The system supports three deployment models:
    - Reverse proxy
    - Uploader sidecar on validator
 
-3. **Consolidated Setup**
+3. **Simplified Legacy Setup - No Gossip Client**
+   - No separate gossip client
    - All components on single host
    - Reverse proxy
    - Uploader sidecar
