@@ -1,4 +1,4 @@
-use log::{debug, warn};
+use log::{debug, info, warn};
 use solana_gossip::{
     cluster_info::ClusterInfo, contact_info::ContactInfo, gossip_service::GossipService,
 };
@@ -17,12 +17,13 @@ use tokio;
 /// Accepts multiple entrypoints for redundancy
 /// This is a modified version of
 /// solana_gossip::gossip_service::make_gossip_node that takes an entrypoints
-/// vector instead of a single entrypoint
+/// vector instead of a single entrypoint, and an optional rpc_addr to set on the node
 pub fn make_gossip_node(
     keypair: Keypair,
     entrypoints: Vec<SocketAddr>,
     exit: Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
+    rpc_addr: Option<&SocketAddr>,
     shred_version: u16,
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
@@ -37,10 +38,16 @@ pub fn make_gossip_node(
 
     // Add all entrypoints to the cluster info
     cluster_info.set_entrypoints(
-        entrypoints.iter()
+        entrypoints
+            .iter()
             .map(|addr| ContactInfo::new_gossip_entry_point(addr))
-            .collect()
+            .collect(),
     );
+
+    // Set RPC address on the node
+    if let Some(addr) = rpc_addr {
+        cluster_info.my_contact_info().set_rpc(*addr).unwrap();
+    }
 
     let cluster_info = Arc::new(cluster_info);
     let gossip_service = GossipService::new(
@@ -82,7 +89,7 @@ pub async fn monitor_gossip_service(
         }
 
         if peer_count > max_peer_count {
-            warn!(
+            info!(
                 "Current peer count: {} (elapsed: {}s)",
                 peer_count,
                 start.elapsed().as_secs()

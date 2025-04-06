@@ -83,9 +83,9 @@ The system supports three deployment models:
 ### Network Requirements
 
 - Static public IP address
-- Ingress allow list:
-  - UDP port 8001 (gossip)
-  - TCP port 8899 (RPC)
+- Ingress allow/forward list:
+  - UDP port 8001 (gossip) - if you need to be a publicly reachable gossip entrypoint (optional)
+  - TCP port 8899 (RPC) - A publicly reachable RPC endpoint is required for validators to accept snapshots from you
 
 **Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
 
@@ -93,7 +93,6 @@ The system supports three deployment models:
    - `getSlot` returns zero ([issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5)).
    - Large dependency footprint from `solana_gossip`.
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #10](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/10)).
-   - In most cases, you should not need port forwarding for gossip, only for RPC, but we do it for both for simplicity during development.
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
 
 
