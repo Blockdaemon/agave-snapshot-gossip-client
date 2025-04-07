@@ -29,7 +29,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/linux-x86_64/agave-snapshot-gossip-client
+            artifacts/linux-x86_64/snapshot-gossip-client
             artifacts/linux-x86_64/example-config.toml
           generate_release_notes: true
           draft: false
