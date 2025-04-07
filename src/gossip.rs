@@ -77,7 +77,6 @@ pub async fn monitor_gossip_service(
 ) {
     warn!("Connecting to gossip...");
     let start = std::time::Instant::now();
-    let mut max_peer_count = 1;
     let mut last_peer_count = 0;
     let mut connected = false;
     while !exit.load(std::sync::atomic::Ordering::SeqCst) {
@@ -88,24 +87,22 @@ pub async fn monitor_gossip_service(
         }
 
         if peer_count != last_peer_count {
-            debug!("\n{}\n", cluster_info.rpc_info_trace());
-            num_peers.store(
-                peer_count.try_into().unwrap(),
-                std::sync::atomic::Ordering::SeqCst,
-            );
-            last_peer_count = peer_count;
-        }
-
-        if peer_count > max_peer_count {
             info!(
                 "Current peer count: {} (elapsed: {}s)",
                 peer_count,
                 start.elapsed().as_secs()
             );
+            debug!("TRACE\n{}", cluster_info.rpc_info_trace());
+            num_peers.store(
+                peer_count.try_into().unwrap(),
+                std::sync::atomic::Ordering::SeqCst,
+            );
             for (peer, _) in cluster_info.all_peers() {
-                if peer.shred_version() != 0 && peer.rpc().is_some() {
+                let me = peer.pubkey() == &cluster_info.id();
+                if me || (peer.shred_version() != 0 && peer.rpc().is_some()) {
                     debug!(
-                        "    - Peer: {:?} {:?} {:?} {:?}",
+                        "{} {:?} {:?} {:?} {:?}",
+                        if me { "  Me:" } else { "Peer:" },
                         peer.pubkey(),
                         peer.shred_version(),
                         peer.gossip().map_or_else(
@@ -117,7 +114,7 @@ pub async fn monitor_gossip_service(
                     )
                 }
             }
-            max_peer_count = peer_count;
+            last_peer_count = peer_count;
         }
 
         tokio::time::sleep(Duration::from_secs(1)).await;

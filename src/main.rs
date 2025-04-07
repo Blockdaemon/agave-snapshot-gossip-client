@@ -122,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(gossip_addr),
         Some(rpc_addr),
         Some(rpc_pubsub_addr),
-        0,
+        resolved.shred_version,
         true,
         SocketAddrSpace::Unspecified,
     );

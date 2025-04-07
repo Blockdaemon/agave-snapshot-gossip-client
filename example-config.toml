@@ -10,6 +10,9 @@ entrypoints = [
 # Genesis hash (default: testnet)
 genesis_hash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
 
+# Shred version (default: testnet)
+shred_version = 64475
+
 # Storage server (default: None)
 storage_server = "https://your-storage-server.com"
 

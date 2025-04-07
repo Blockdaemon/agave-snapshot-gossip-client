@@ -70,16 +70,19 @@ The system supports three deployment models:
 
 ### Configuration Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `entrypoints` | Testnet | Gossip network entry points |
-| `genesis_hash` | Testnet | Genesis hash |
-| `keypair_path` | `keypair.json` | Path to keypair file |
-| `rpc_listen` | `0.0.0.0:8899` | RPC listen address |
-| `public_ip` | Auto (STUN), port `8001` | Public IP address |
-| `stun_server` | `stun.l.google.com:3478` | STUN server address |
-| `enable_upnp` | `false` | Enable UPnP port forwarding |
-| `storage_server` | None | Storage server URL |
+| Option           | Default                   | Description                 |
+|------------------|---------------------------|-----------------------------|
+| `entrypoints`    | Testnet                   | Gossip network entry points |
+| `genesis_hash`   | Testnet                   | Genesis hash                |
+| `shred_version`  | Testnet                   | Shred version               |
+| `keypair_path`   | `keypair.json`            | Path to keypair file        |
+| `rpc_listen`     | `0.0.0.0:8899`            | RPC listen address          |
+| `public_ip`      | Auto (STUN + port `8001`) | Public IP address           |
+| `stun_server`    | `stun.l.google.com:3478`  | STUN server address         |
+| `enable_upnp`    | `false`                   | Enable UPnP port forwarding |
+| `storage_server` | None                      | Storage server URL          |
+
+**Note**: If you override the default `entrypoints`, you must also specify the `genesis_hash` and `shred_version`.
 
 ### Network Requirements
 

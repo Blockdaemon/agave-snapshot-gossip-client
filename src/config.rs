@@ -1,6 +1,6 @@
 use crate::constants::{
     DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_TESTNET_ENTRYPOINTS,
-    DEFAULT_TESTNET_GENESIS_HASH,
+    DEFAULT_TESTNET_GENESIS_HASH, DEFAULT_TESTNET_SHRED_VERSION,
 };
 use crate::stun::{StunClient, StunError};
 use dns_lookup::lookup_host;
@@ -15,10 +15,11 @@ pub struct Config {
     pub keypair_path: String,
     pub stun_server: Option<String>,
     pub entrypoints: Option<Vec<String>>,
+    pub genesis_hash: Option<String>,
+    pub shred_version: Option<u16>,
     pub public_addr: Option<String>,
     pub enable_upnp: Option<bool>,
     pub rpc_listen: Option<String>,
-    pub genesis_hash: Option<String>,
     pub storage_server: Option<String>,
 }
 
@@ -30,6 +31,7 @@ fn default_keypair_path() -> String {
 pub struct ResolvedConfig {
     pub entrypoints: Vec<SocketAddr>,
     pub genesis_hash: String,
+    pub shred_version: u16,
     pub rpc_listen: SocketAddr,
     pub public_addr: IpAddr,
     pub enable_upnp: bool,
@@ -145,6 +147,7 @@ impl Config {
                 .genesis_hash
                 .clone()
                 .unwrap_or_else(|| DEFAULT_TESTNET_GENESIS_HASH.to_string()),
+            shred_version: self.shred_version.unwrap_or(DEFAULT_TESTNET_SHRED_VERSION),
             rpc_listen,
             public_addr,
             enable_upnp,
@@ -173,6 +176,7 @@ pub fn load_config() -> Config {
                 enable_upnp: None,
                 rpc_listen: None,
                 genesis_hash: None,
+                shred_version: None,
                 storage_server: None,
             }
         }
