@@ -27,34 +27,47 @@ impl Error for UpnpError {}
 
 /// A composite key that uniquely identifies a port forwarding entry.
 /// The lower 16 bits represent the port number, and bit 16 represents the protocol (0 for UDP, 1 for TCP).
-type PortKey = u32;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PortKey(u32);
+
+impl PortKey {
+    /// Creates a new PortKey from a port and protocol combination.
+    ///
+    /// # Arguments
+    /// * `port` - The port number (0-65535)
+    /// * `protocol` - The protocol (UDP or TCP)
+    fn new(port: u16, protocol: &PortMappingProtocol) -> Self {
+        let protocol_bit = match protocol {
+            PortMappingProtocol::UDP => 0,
+            PortMappingProtocol::TCP => 1,
+        };
+        Self(((protocol_bit as u32) << 16) | (port as u32))
+    }
+
+    /// Extracts port and protocol from the PortKey.
+    fn decode(&self) -> (u16, PortMappingProtocol) {
+        let port = (self.0 & 0xFFFF) as u16;
+        let protocol = if (self.0 >> 16) & 1 == 0 {
+            PortMappingProtocol::UDP
+        } else {
+            PortMappingProtocol::TCP
+        };
+        (port, protocol)
+    }
+}
+
+trait PortSetExt {
+    fn insert_port(&mut self, port: u16, protocol: &PortMappingProtocol);
+}
+
+impl PortSetExt for HashSet<PortKey> {
+    fn insert_port(&mut self, port: u16, protocol: &PortMappingProtocol) {
+        self.insert(PortKey::new(port, protocol));
+    }
+}
 
 lazy_static::lazy_static! {
     static ref FORWARDED_PORTS: Mutex<HashSet<PortKey>> = Mutex::new(HashSet::new());
-}
-
-/// Creates a unique key for a port and protocol combination.
-///
-/// # Arguments
-/// * `port` - The port number (0-65535)
-/// * `protocol` - The protocol (UDP or TCP)
-fn make_port_key(port: u16, protocol: &PortMappingProtocol) -> PortKey {
-    let protocol_bit = match protocol {
-        PortMappingProtocol::UDP => 0,
-        PortMappingProtocol::TCP => 1,
-    };
-    ((protocol_bit as u32) << 16) | (port as u32)
-}
-
-/// Extracts port and protocol from a port key.
-fn decode_port_key(key: PortKey) -> (u16, PortMappingProtocol) {
-    let port = (key & 0xFFFF) as u16;
-    let protocol = if (key >> 16) & 1 == 0 {
-        PortMappingProtocol::UDP
-    } else {
-        PortMappingProtocol::TCP
-    };
-    (port, protocol)
 }
 
 /// Creates a UPnP configuration for a port and protocol.
@@ -95,7 +108,7 @@ pub fn setup_port_forwarding(ports: Vec<(u16, PortMappingProtocol)>) -> Result<(
             match result {
                 Ok(_) => {
                     info!("Successfully forwarded port {} ({:?})", port, protocol);
-                    forwarded_ports.insert(make_port_key(*port, protocol));
+                    forwarded_ports.insert_port(*port, protocol);
                     break;
                 }
                 Err(e) => {
@@ -132,7 +145,7 @@ pub fn cleanup_port_forwarding() {
 
     let ports_to_remove: Vec<_> = ports.iter().copied().collect();
     for port_key in ports_to_remove {
-        let (port, protocol) = decode_port_key(port_key);
+        let (port, protocol) = port_key.decode();
         info!(
             "Removing port forwarding for port {} ({:?})...",
             port, protocol
