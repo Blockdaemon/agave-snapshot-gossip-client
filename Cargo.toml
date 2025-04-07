@@ -18,9 +18,11 @@ solana-gossip = "~2"
 solana-sdk = "~2"
 solana-streamer = "~2"
 solana-version = "~2"
+chrono = "*"
 dns-lookup = "~2"
 easy-upnp = "*"
 env_logger = "*"
+clap = { version = "~4", features = ["derive"] }
 jsonrpc-core = "~18"
 jsonrpc-http-server = "~18"
 lazy_static = "~1"
@@ -34,7 +36,7 @@ toml = "*"
 
 [build-dependencies]
 anyhow = "*"
-vergen = { version = "*", features = ["build", "rustc"] }
+chrono = "*"
 
 [package.metadata.docs.rs]
 targets = [

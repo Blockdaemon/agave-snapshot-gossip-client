@@ -5,6 +5,7 @@ mod rpc;
 mod stun;
 mod upnp;
 
+use clap::Parser;
 use easy_upnp::PortMappingProtocol;
 use env_logger;
 use gossip::make_gossip_node;
@@ -20,6 +21,14 @@ use std::sync::Arc;
 use std::thread;
 
 pub use constants::*; // Re-export the constants
+
+#[derive(Parser)]
+#[command(author, about, long_about = None, disable_version_flag = true)]
+struct Cli {
+    /// Print version information and exit
+    #[arg(short, long)]
+    version: bool,
+}
 
 async fn setup_signal_handler(exit: Arc<AtomicBool>) -> Result<(), tokio::task::JoinError> {
     tokio::spawn(async move {
@@ -51,6 +60,16 @@ async fn setup_signal_handler(exit: Arc<AtomicBool>) -> Result<(), tokio::task::
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+
+    if cli.version {
+        println!("agave-snapshot-gossip-client {}", env!("CARGO_PKG_VERSION"));
+        println!("Build timestamp: {}", env!("BUILD_TIMESTAMP"));
+        println!("Git tag: {}", env!("GIT_TAG"));
+        println!("Git SHA: {}", env!("GIT_SHA"));
+        return Ok(());
+    }
+
     env_logger::init();
     let config = config::load_config();
     let node_keypair = read_keypair_file(&config.keypair_path).unwrap_or_else(|err| {
