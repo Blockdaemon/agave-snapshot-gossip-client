@@ -1,0 +1,15 @@
+name: PR Build
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-common.yml
+    with:
+      upload_artifacts: false
+      verify_version: true

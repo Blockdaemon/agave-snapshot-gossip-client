@@ -1,0 +1,36 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-common.yml
+    with:
+      upload_artifacts: true
+      verify_version: true
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/linux-x86_64/agave-snapshot-gossip-client
+            artifacts/linux-x86_64/example-config.toml
+          generate_release_notes: true
+          draft: false
+          prerelease: false

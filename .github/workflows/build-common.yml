@@ -1,0 +1,78 @@
+name: Build Common
+
+on:
+  workflow_call:
+    inputs:
+      upload_artifacts:
+        type: boolean
+        default: true
+        description: 'Whether to upload build artifacts'
+      verify_version:
+        type: boolean
+        default: true
+        description: 'Whether to verify version output'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Setup cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: |
+            .
+          cache-targets: true
+          cache-on-failure: true
+          cache-all-crates: true
+          prefix-key: rust-cache
+
+      - name: Get timestamp
+        id: get_timestamp
+        run: echo "timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
+
+      - name: Get git info
+        id: get_git_info
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "tag=$(git describe --tags --always)" >> $GITHUB_OUTPUT
+
+      - name: Build
+        run: |
+          export BUILD_TIMESTAMP=${{ steps.get_timestamp.outputs.timestamp }}
+          export GIT_SHA=${{ steps.get_git_info.outputs.sha }}
+          export GIT_TAG=${{ steps.get_git_info.outputs.tag }}
+          RUSTFLAGS="-C target-cpu=native" cargo build --release
+          mkdir -p artifacts
+          cp target/release/snapshot-gossip-client artifacts/
+          cp example-config.toml artifacts/
+
+      - name: Upload artifacts
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: artifacts/*
+          if-no-files-found: error
+
+      - name: Verify version
+        if: ${{ inputs.verify_version }}
+        run: |
+          ./target/release/snapshot-gossip-client --version
