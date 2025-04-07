@@ -24,6 +24,7 @@ pub fn make_gossip_node(
     exit: Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
     rpc_addr: Option<&SocketAddr>,
+    rpc_pubsub_addr: Option<&SocketAddr>,
     shred_version: u16,
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
@@ -44,9 +45,15 @@ pub fn make_gossip_node(
             .collect(),
     );
 
-    // Set RPC address on the node
+    // Set RPC/PubSub address on the node
     if let Some(addr) = rpc_addr {
         cluster_info.my_contact_info().set_rpc(*addr).unwrap();
+    }
+    if let Some(addr) = rpc_pubsub_addr {
+        cluster_info
+            .my_contact_info()
+            .set_rpc_pubsub(*addr)
+            .unwrap();
     }
 
     let cluster_info = Arc::new(cluster_info);

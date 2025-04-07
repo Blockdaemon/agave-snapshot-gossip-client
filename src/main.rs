@@ -110,9 +110,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start gossip service
     let gossip_addr = &SocketAddr::new(resolved.public_addr, DEFAULT_GOSSIP_PORT);
     let rpc_addr = &SocketAddr::new(resolved.public_addr, resolved.rpc_listen.port());
+    let rpc_pubsub_addr = &SocketAddr::new(resolved.public_addr, resolved.rpc_listen.port() + 1);
     info!(
-        "Starting gossip service, reporting {:?} and {:?}...",
-        gossip_addr, rpc_addr
+        "Starting gossip service, reporting {:?} rpc:{:?} pubsub:{:?}...",
+        gossip_addr, rpc_addr, rpc_pubsub_addr
     );
     let (gossip_service, _, cluster_info) = make_gossip_node(
         node_keypair,
@@ -120,6 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         exit.clone(), // clone #2
         Some(gossip_addr),
         Some(rpc_addr),
+        Some(rpc_pubsub_addr),
         0,
         true,
         SocketAddrSpace::Unspecified,
