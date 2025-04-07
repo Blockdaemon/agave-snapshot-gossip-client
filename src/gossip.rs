@@ -12,6 +12,80 @@ use std::{
 };
 use tokio;
 
+trait ContactInfoDebugExt {
+    fn debug(&self) -> String;
+}
+
+impl ContactInfoDebugExt for ContactInfo {
+    fn debug(&self) -> String {
+        format!(
+            "{:?} {:?} {:?} {:?}",
+            self.pubkey(),
+            self.shred_version(),
+            self.gossip().map_or_else(
+                || { String::from("<no addr>") },
+                |addr| addr.ip().to_string()
+            ),
+            self.rpc()
+                .map_or_else(|| { String::from("<no rpc>") }, |addr| addr.to_string()),
+        )
+    }
+}
+
+pub trait GossipMonitor {
+    async fn monitor_gossip(&self, exit: Arc<AtomicBool>, num_peers: Arc<AtomicI64>);
+}
+
+impl GossipMonitor for Arc<ClusterInfo> {
+    async fn monitor_gossip(&self, exit: Arc<AtomicBool>, num_peers: Arc<AtomicI64>) {
+        warn!("Connecting to gossip...");
+        let start = std::time::Instant::now();
+        let mut last_peer_count = 0;
+        let mut connected = false;
+        while !exit.load(std::sync::atomic::Ordering::SeqCst) {
+            let peer_count = self.all_peers().len();
+            if peer_count > 1 && !connected {
+                connected = true;
+                warn!("Connected to gossip, {} peers", peer_count);
+            }
+
+            /*
+                for (peer, _) in self.all_peers() {
+                    let is_me = peer.pubkey() == &self.id();
+                    let ssdn = peer.pubkey().to_string().starts_with("SSDN");
+                    if is_me || ssdn {
+                        debug!("{}: {}", if is_me { "  me" } else { "Peer" }, peer.debug());
+                    }
+                }
+            */
+
+            if peer_count != last_peer_count {
+                info!(
+                    "Current peer count: {} (elapsed: {}s)",
+                    peer_count,
+                    start.elapsed().as_secs()
+                );
+                debug!("TRACE\n{}", self.rpc_info_trace());
+                num_peers.store(
+                    peer_count.try_into().unwrap(),
+                    std::sync::atomic::Ordering::SeqCst,
+                );
+                for (peer, _) in self.all_peers() {
+                    let is_me = peer.pubkey() == &self.id();
+                    let ssdn = peer.pubkey().to_string().starts_with("SSDN");
+                    if is_me || ssdn || (peer.shred_version() != 0 && peer.rpc().is_some()) {
+                        debug!("{}: {}", if is_me { "  me" } else { "Peer" }, peer.debug());
+                    }
+                }
+                last_peer_count = peer_count;
+            }
+
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        info!("Gossip monitor service exited");
+    }
+}
+
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
 /// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
 /// Accepts multiple entrypoints for redundancy
@@ -68,56 +142,4 @@ pub fn make_gossip_node(
     );
 
     (gossip_service, ip_echo, cluster_info)
-}
-
-pub async fn monitor_gossip_service(
-    cluster_info: Arc<ClusterInfo>,
-    exit: Arc<AtomicBool>,
-    num_peers: Arc<AtomicI64>,
-) {
-    warn!("Connecting to gossip...");
-    let start = std::time::Instant::now();
-    let mut last_peer_count = 0;
-    let mut connected = false;
-    while !exit.load(std::sync::atomic::Ordering::SeqCst) {
-        let peer_count = cluster_info.all_peers().len();
-        if peer_count > 1 && !connected {
-            connected = true;
-            warn!("Connected to gossip, {} peers", peer_count);
-        }
-
-        if peer_count != last_peer_count {
-            info!(
-                "Current peer count: {} (elapsed: {}s)",
-                peer_count,
-                start.elapsed().as_secs()
-            );
-            debug!("TRACE\n{}", cluster_info.rpc_info_trace());
-            num_peers.store(
-                peer_count.try_into().unwrap(),
-                std::sync::atomic::Ordering::SeqCst,
-            );
-            for (peer, _) in cluster_info.all_peers() {
-                let me = peer.pubkey() == &cluster_info.id();
-                if me || (peer.shred_version() != 0 && peer.rpc().is_some()) {
-                    debug!(
-                        "{} {:?} {:?} {:?} {:?}",
-                        if me { "  Me:" } else { "Peer:" },
-                        peer.pubkey(),
-                        peer.shred_version(),
-                        peer.gossip().map_or_else(
-                            || { String::from("<no addr>") },
-                            |addr| addr.ip().to_string()
-                        ),
-                        peer.rpc()
-                            .map_or_else(|| { String::from("<no rpc>") }, |addr| addr.to_string()),
-                    )
-                }
-            }
-            last_peer_count = peer_count;
-        }
-
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
-    info!("Gossip monitor service exited");
 }

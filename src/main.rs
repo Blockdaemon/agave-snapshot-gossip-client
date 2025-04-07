@@ -8,7 +8,7 @@ mod upnp;
 use clap::Parser;
 use easy_upnp::PortMappingProtocol;
 use env_logger;
-use gossip::make_gossip_node;
+use gossip::{make_gossip_node, GossipMonitor};
 use log::{error, info, warn};
 use rpc::RpcServer;
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
@@ -135,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let exit = exit.clone(); // clone #3
         let num_peers = num_peers.clone();
         async move {
-            gossip::monitor_gossip_service(cluster_info, exit, num_peers).await;
+            cluster_info.monitor_gossip(exit, num_peers).await;
         }
     });
     info!("Started monitor service");
