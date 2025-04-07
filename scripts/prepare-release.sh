@@ -13,16 +13,17 @@ TAG="v${VERSION}"
 # Update Cargo.toml version
 sed -i '' "s/^version = .*/version = \"${VERSION}\"/" Cargo.toml
 
+# Build and verify version
+echo "Building and verifying version..."
+cargo fmt
+cargo build --release
+./target/release/snapshot-gossip-client --version
+
 # Commit the version update
 git add Cargo.toml
-git commit -m "Bump version to ${VERSION}"
+git commit -m "Bump version to ${VERSION}" || true
 
 # Create and push the tag
 git tag -a "${TAG}" -m "Release ${TAG}"
 git push origin main
 git push origin "${TAG}"
-
-# Build and verify version
-echo "Building and verifying version..."
-cargo build --release
-./target/release/agave-snapshot-gossip-client --version
