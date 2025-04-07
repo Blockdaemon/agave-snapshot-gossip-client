@@ -34,3 +34,6 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+
+permissions:
+  contents: write  # This allows creating releases

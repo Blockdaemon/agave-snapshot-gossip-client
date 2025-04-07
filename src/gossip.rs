@@ -88,6 +88,7 @@ pub async fn monitor_gossip_service(
         }
 
         if peer_count != last_peer_count {
+            debug!("\n{}\n", cluster_info.rpc_info_trace());
             num_peers.store(
                 peer_count.try_into().unwrap(),
                 std::sync::atomic::Ordering::SeqCst,
@@ -102,15 +103,19 @@ pub async fn monitor_gossip_service(
                 start.elapsed().as_secs()
             );
             for (peer, _) in cluster_info.all_peers() {
-                debug!(
-                    "    - Peer: {:?} {:?} {:?}",
-                    peer.pubkey(),
-                    peer.shred_version(),
-                    peer.gossip().map_or_else(
-                        || { String::from("<no addr>") },
-                        |addr| addr.ip().to_string()
-                    ),
-                )
+                if peer.shred_version() != 0 && peer.rpc().is_some() {
+                    debug!(
+                        "    - Peer: {:?} {:?} {:?} {:?}",
+                        peer.pubkey(),
+                        peer.shred_version(),
+                        peer.gossip().map_or_else(
+                            || { String::from("<no addr>") },
+                            |addr| addr.ip().to_string()
+                        ),
+                        peer.rpc()
+                            .map_or_else(|| { String::from("<no rpc>") }, |addr| addr.to_string()),
+                    )
+                }
             }
             max_peer_count = peer_count;
         }
