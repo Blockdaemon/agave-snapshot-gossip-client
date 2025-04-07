@@ -95,8 +95,9 @@ The system supports three deployment models:
 
 ## Known Issues
    - `getSlot` returns zero ([issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5)).
-   - Large dependency footprint from `solana_gossip`.
-   - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #10](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/10)).
+   - Our RPC socket is not being reported to the gossip network ([issue #14](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/14)).
+   - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.
+   - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
 
 
