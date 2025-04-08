@@ -63,8 +63,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
                 );
                 for (peer, _) in self.all_peers() {
                     let is_me = peer.pubkey() == &self.id();
-                    let ssdn = peer.pubkey().to_string().starts_with("SSDN");
-                    if is_me || ssdn || (peer.shred_version() != 0 && peer.rpc().is_some()) {
+                    if is_me || (peer.shred_version() != 0 && peer.rpc().is_some()) {
                         debug!("{}: {}", if is_me { "  me" } else { "Peer" }, peer.debug());
                     }
                 }
