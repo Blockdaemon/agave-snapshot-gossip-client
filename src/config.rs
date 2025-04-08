@@ -4,6 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use dns_lookup::lookup_host;
 use log::{error, warn};
 use serde::Deserialize;
+use url::Url;
 
 use crate::constants::{
     DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT,
@@ -37,7 +38,7 @@ pub struct Config {
     pub enable_upnp: Option<bool>,
 
     // Where to redirect HTTP GET requests to
-    pub storage_server: Option<String>,
+    pub storage_path: Option<String>,
 }
 
 fn default_keypair_path() -> String {
@@ -54,7 +55,7 @@ pub struct ResolvedConfig {
     pub gossip_port: u16,
     pub rpc_port: u16,
     pub enable_upnp: bool,
-    pub storage_server: String,
+    pub storage_path: String,
 }
 
 #[derive(Debug)]
@@ -147,6 +148,19 @@ impl Config {
             .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let mut storage_path = self.storage_path.clone().unwrap_or_default();
+        if !storage_path.is_empty() {
+            let mut url = Url::parse(&storage_path)
+                .map_err(|e| ConfigError::ParseError(format!("Invalid storage path URL: {}", e)))?;
+
+            // Only remove trailing slash if there's no path component
+            if url.path() == "/" && url.query().is_none() && url.fragment().is_none() {
+                url.set_path("");
+            }
+
+            storage_path = url.to_string();
+        }
+
         Ok(ResolvedConfig {
             entrypoints,
             genesis_hash: self
@@ -163,7 +177,7 @@ impl Config {
             gossip_port: self.gossip_port.unwrap_or(DEFAULT_GOSSIP_PORT),
             rpc_port: self.rpc_port.unwrap_or(DEFAULT_RPC_PORT),
             enable_upnp: self.enable_upnp.unwrap_or(false),
-            storage_server: self.storage_server.clone().unwrap_or_default(),
+            storage_path,
         })
     }
 }
@@ -192,7 +206,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
                 rpc_port: None,
                 genesis_hash: None,
                 shred_version: None,
-                storage_server: None,
+                storage_path: None,
             }
         }
         Err(e) => panic!("Error reading {}: {}", path, e),

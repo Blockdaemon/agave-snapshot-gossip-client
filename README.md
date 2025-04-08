@@ -84,7 +84,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 | `gossip_port`    | `8001`                    | Gossip listen port          |
 | `rpc_port`       | `8899`                    | RPC listen port             |
 | `enable_upnp`    | `false`                   | Enable UPnP port forwarding |
-| `storage_server` | None                      | Storage server URL          |
+| `storage_path`   | None                      | Storage path                |
 
 **Note**: If you override the default `entrypoints`, you must also specify the `genesis_hash` and `shred_version`.
 

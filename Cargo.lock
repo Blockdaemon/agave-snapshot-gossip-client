@@ -138,6 +138,7 @@ dependencies = [
  "stun-client",
  "tokio",
  "toml 0.8.20",
+ "url",
 ]
 
 [[package]]

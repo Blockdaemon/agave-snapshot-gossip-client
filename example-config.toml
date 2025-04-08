@@ -34,5 +34,8 @@ shred_version = 64475
 # Optional: Enable upnp (default: false)
 #enable_upnp = true
 
-# Storage server (default: None)
-storage_server = "https://your-storage-server.com"
+# Where to redirect HTTP GET requests to
+#storage_path = "https://your-storage-server.com"
+# or
+#storage_path = "https://your-storage-server.com/path/"
+

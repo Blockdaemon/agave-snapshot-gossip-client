@@ -35,6 +35,7 @@ signal-hook = "*"
 stun-client = "*"
 tokio = { version = "~1", features = ["rt"] }
 toml = "*"
+url = "~2"
 
 [build-dependencies]
 anyhow = "*"
