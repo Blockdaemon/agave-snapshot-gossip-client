@@ -12,7 +12,6 @@ use gossip::{make_gossip_node, GossipMonitor};
 use log::{error, info, warn};
 use rpc::RpcServer;
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
-use solana_streamer::socket::SocketAddrSpace;
 use solana_version::Version;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -85,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         error!("Failed to resolve configuration: {:?}", e);
         e
     })?;
-    info!("Public address: {}", resolved.public_addr);
+    info!("Public address: {}", resolved.public_ip);
 
     if resolved.entrypoints.is_empty() {
         return Err("No entrypoints configured".into());
@@ -94,8 +93,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Try to set up UPnP port forwarding BEFORE signal handler
     if resolved.enable_upnp {
         if let Err(e) = upnp::setup_port_forwarding(vec![
-            (DEFAULT_GOSSIP_PORT, PortMappingProtocol::UDP),
-            (resolved.rpc_listen.port(), PortMappingProtocol::TCP),
+            (resolved.gossip_port, PortMappingProtocol::UDP),
+            (resolved.rpc_port, PortMappingProtocol::TCP),
         ]) {
             error!("Failed to set up UPnP port forwarding: {}", e);
         }
@@ -108,23 +107,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signal_handler = setup_signal_handler(exit.clone()); // clone #1
 
     // Start gossip service
-    let gossip_addr = &SocketAddr::new(resolved.public_addr, DEFAULT_GOSSIP_PORT);
-    let rpc_addr = &SocketAddr::new(resolved.public_addr, resolved.rpc_listen.port());
-    let rpc_pubsub_addr = &SocketAddr::new(resolved.public_addr, resolved.rpc_listen.port() + 1);
-    info!(
-        "Starting gossip service, reporting {:?} rpc:{:?} pubsub:{:?}...",
-        gossip_addr, rpc_addr, rpc_pubsub_addr
-    );
-    let (gossip_service, _, cluster_info) = make_gossip_node(
+    let rpc_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port);
+    let rpc_pubsub_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port + 1);
+    info!("Starting gossip service, reporting rpc {:?}", rpc_addr);
+    let (gossip_service, cluster_info) = make_gossip_node(
         node_keypair,
         resolved.entrypoints,
-        exit.clone(), // clone #2
-        Some(gossip_addr),
-        Some(rpc_addr),
-        Some(rpc_pubsub_addr),
+        exit.clone(),       // clone #2
+        resolved.listen_ip, // localhost, listen ip, or 0.0.0.0
+        resolved.public_ip,
+        resolved.gossip_port,
+        Some(rpc_addr),        // public_ip:rpc_port
+        Some(rpc_pubsub_addr), // public_ip:rpc_port+1
         resolved.shred_version,
-        true,
-        SocketAddrSpace::Unspecified,
     );
     info!("Started gossip service");
 
@@ -140,7 +135,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     info!("Started monitor service");
 
-    info!("Starting RPC server on {}...", resolved.rpc_listen);
+    let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
+    info!("Starting RPC server on {}...", rpc_listen);
     let slot = Arc::new(AtomicI64::new(0));
     let rpc_server = RpcServer::new(
         Version::default().to_string(),
@@ -149,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         num_peers.clone(),
         resolved.storage_server,
     );
-    let _rpc_server = rpc_server.start(resolved.rpc_listen);
+    let _rpc_server = rpc_server.start(rpc_listen);
     info!("Started RPC server");
 
     warn!("Ready to accept connections");

@@ -13,13 +13,27 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 pub struct Config {
     #[serde(default = "default_keypair_path")]
     pub keypair_path: String,
-    pub stun_server: Option<String>,
+
+    // What network to connect to
     pub entrypoints: Option<Vec<String>>,
     pub genesis_hash: Option<String>,
     pub shred_version: Option<u16>,
-    pub public_addr: Option<String>,
+
+    // What local address to listen on
+    pub listen_ip: Option<String>,
+
+    // What public IP to advertise, or how to discover it
+    pub public_ip: Option<String>,
+    pub stun_server: Option<String>,
+
+    // What gossip and rpc ports to listen on and advertise
+    pub gossip_port: Option<u16>,
+    pub rpc_port: Option<u16>,
+
+    // Punch holes in the firewall
     pub enable_upnp: Option<bool>,
-    pub rpc_listen: Option<String>,
+
+    // Where to redirect HTTP GET requests to
     pub storage_server: Option<String>,
 }
 
@@ -32,8 +46,10 @@ pub struct ResolvedConfig {
     pub entrypoints: Vec<SocketAddr>,
     pub genesis_hash: String,
     pub shred_version: u16,
-    pub rpc_listen: SocketAddr,
-    pub public_addr: IpAddr,
+    pub listen_ip: IpAddr,
+    pub public_ip: IpAddr,
+    pub gossip_port: u16,
+    pub rpc_port: u16,
     pub enable_upnp: bool,
     pub storage_server: String,
 }
@@ -103,7 +119,7 @@ impl Config {
     }
 
     pub async fn resolve(&self) -> Result<ResolvedConfig, ConfigError> {
-        let public_addr = match &self.public_addr {
+        let public_ip = match &self.public_ip {
             Some(addr) => addr
                 .parse()
                 .map_err(|e| ConfigError::ParseError(format!("Invalid public address: {}", e)))?,
@@ -128,19 +144,6 @@ impl Config {
             .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let enable_upnp = self.enable_upnp.unwrap_or(false);
-
-        let rpc_listen = self
-            .rpc_listen
-            .as_ref()
-            .map(|addr| Self::parse_addr(addr, DEFAULT_RPC_PORT))
-            .unwrap_or_else(|| {
-                Ok(SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                    DEFAULT_RPC_PORT,
-                ))
-            })?;
-
         Ok(ResolvedConfig {
             entrypoints,
             genesis_hash: self
@@ -148,9 +151,15 @@ impl Config {
                 .clone()
                 .unwrap_or_else(|| DEFAULT_TESTNET_GENESIS_HASH.to_string()),
             shred_version: self.shred_version.unwrap_or(DEFAULT_TESTNET_SHRED_VERSION),
-            rpc_listen,
-            public_addr,
-            enable_upnp,
+            listen_ip: self
+                .listen_ip
+                .as_ref()
+                .and_then(|ip| ip.parse().ok())
+                .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            public_ip,
+            gossip_port: self.gossip_port.unwrap_or(DEFAULT_GOSSIP_PORT),
+            rpc_port: self.rpc_port.unwrap_or(DEFAULT_RPC_PORT),
+            enable_upnp: self.enable_upnp.unwrap_or(false),
             storage_server: self.storage_server.clone().unwrap_or_default(),
         })
     }
@@ -172,9 +181,11 @@ pub fn load_config() -> Config {
                 keypair_path: String::new(),
                 entrypoints: None,
                 stun_server: None,
-                public_addr: None,
+                public_ip: None,
                 enable_upnp: None,
-                rpc_listen: None,
+                listen_ip: None,
+                gossip_port: None,
+                rpc_port: None,
                 genesis_hash: None,
                 shred_version: None,
                 storage_server: None,

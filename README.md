@@ -76,9 +76,11 @@ The system supports three deployment models:
 | `genesis_hash`   | Testnet                   | Genesis hash                |
 | `shred_version`  | Testnet                   | Shred version               |
 | `keypair_path`   | `keypair.json`            | Path to keypair file        |
-| `rpc_listen`     | `0.0.0.0:8899`            | RPC listen address          |
-| `public_ip`      | Auto (STUN + port `8001`) | Public IP address           |
+| `ip_listen`      | `0.0.0.0`                 | Local listen address        |
+| `public_ip`      | Auto (STUN)               | Public IP address           |
 | `stun_server`    | `stun.l.google.com:3478`  | STUN server address         |
+| `gossip_port`    | `8001`                    | Gossip listen port          |
+| `rpc_port`       | `8899`                    | RPC listen port             |
 | `enable_upnp`    | `false`                   | Enable UPnP port forwarding |
 | `storage_server` | None                      | Storage server URL          |
 
@@ -95,7 +97,6 @@ The system supports three deployment models:
 
 ## Known Issues
    - `getSlot` returns zero ([issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5)).
-   - Our RPC socket is not being reported to the gossip network ([issue #14](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/14)).
    - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).

@@ -13,20 +13,26 @@ genesis_hash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
 # Shred version (default: testnet)
 shred_version = 64475
 
-# Storage server (default: None)
-storage_server = "https://your-storage-server.com"
-
-# Optional: Bind address for RPC (default: 0.0.0.0:8899)
-#rpc_listen = "127.0.0.1:8899"
-
 # Optional: Path to keypair file (default: keypair.json)
 #keypair_path = "my-keypair.json"
 
+# Optional: listen address for RPC and gossip (default: 0.0.0.0)
+#ip_listen = "127.0.0.1"
+
 # Optional: Public IP address (default: use STUN)
-#public_addr = "1.2.3.4"
+#public_ip = "1.2.3.4"
 
 # Optional: STUN server (default: stun.l.google.com:3478)
 #stun_server = "1.2.3.4:3478"
 
+# Optional: Gossip listen and advertised port (default: 8001)
+#gossip_port = 8001
+
+# Optional: RPC listen and advertised port (default: 8899)
+#rpc_port = 8899
+
 # Optional: Enable upnp (default: false)
 #enable_upnp = true
+
+# Storage server (default: None)
+storage_server = "https://your-storage-server.com"
