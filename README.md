@@ -78,7 +78,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 | `genesis_hash`   | Testnet                   | Genesis hash                |
 | `shred_version`  | Testnet                   | Shred version               |
 | `keypair_path`   | `keypair.json`            | Path to keypair file        |
-| `ip_listen`      | `0.0.0.0`                 | Local listen address        |
+| `listen_ip`      | `0.0.0.0`                 | Local bind/listen IP        |
 | `public_ip`      | Auto (STUN)               | Public IP address           |
 | `stun_server`    | `stun.l.google.com:3478`  | STUN server address         |
 | `gossip_port`    | `8001`                    | Gossip listen port          |

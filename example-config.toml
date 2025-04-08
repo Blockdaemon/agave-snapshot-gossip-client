@@ -17,7 +17,7 @@ shred_version = 64475
 #keypair_path = "my-keypair.json"
 
 # Optional: listen address for RPC and gossip (default: 0.0.0.0)
-#ip_listen = "127.0.0.1"
+#listen_ip = "127.0.0.1"
 
 # Optional: Public IP address (default: use STUN)
 #public_ip = "1.2.3.4"
