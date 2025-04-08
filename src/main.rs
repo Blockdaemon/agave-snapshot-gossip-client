@@ -19,14 +19,16 @@ use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use std::thread;
 
-pub use constants::*; // Re-export the constants
-
 #[derive(Parser)]
 #[command(author, about, long_about = None, disable_version_flag = true)]
 struct Cli {
     /// Print version information and exit
     #[arg(short, long)]
     version: bool,
+
+    /// Path to config file
+    #[arg(short, long, default_value = crate::constants::DEFAULT_CONFIG_PATH)]
+    config: String,
 }
 
 async fn setup_signal_handler(exit: Arc<AtomicBool>) -> Result<(), tokio::task::JoinError> {
@@ -70,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     env_logger::init();
-    let config = config::load_config();
+    let config = config::load_config(Some(&cli.config));
     let node_keypair = read_keypair_file(&config.keypair_path).unwrap_or_else(|err| {
         warn!(
             "{} not found, generating new keypair: {}",

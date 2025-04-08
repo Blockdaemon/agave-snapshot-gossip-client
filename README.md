@@ -70,6 +70,8 @@ The system supports three deployment models:
 
 ### Configuration Options
 
+Use `--config <path>` to specify a custom config file location. Default is `config.toml` in the current working directory.
+
 | Option           | Default                   | Description                 |
 |------------------|---------------------------|-----------------------------|
 | `entrypoints`    | Testnet                   | Gossip network entry points |

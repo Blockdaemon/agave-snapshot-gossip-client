@@ -1,6 +1,7 @@
 use crate::constants::{
-    DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_TESTNET_ENTRYPOINTS,
-    DEFAULT_TESTNET_GENESIS_HASH, DEFAULT_TESTNET_SHRED_VERSION,
+    DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT,
+    DEFAULT_STUN_SERVER, DEFAULT_TESTNET_ENTRYPOINTS, DEFAULT_TESTNET_GENESIS_HASH,
+    DEFAULT_TESTNET_SHRED_VERSION,
 };
 use crate::stun::{StunClient, StunError};
 use dns_lookup::lookup_host;
@@ -102,7 +103,7 @@ impl Config {
         let stun_server = self
             .stun_server
             .clone()
-            .unwrap_or_else(|| "stun.l.google.com".to_string());
+            .unwrap_or_else(|| DEFAULT_STUN_SERVER.to_string());
 
         let stun_port = if stun_server.contains(':') {
             let parts: Vec<&str> = stun_server.split(':').collect();
@@ -165,18 +166,19 @@ impl Config {
     }
 }
 
-pub fn load_config() -> Config {
-    match fs::read_to_string("config.toml") {
+pub fn load_config(config_path: Option<&str>) -> Config {
+    let path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
+    match fs::read_to_string(path) {
         Ok(config_str) => {
             let mut config: Config = toml::from_str(&config_str).unwrap_or_else(|e| {
-                error!("Failed to parse config.toml: {}", e);
+                error!("Failed to parse {}: {}", path, e);
                 std::process::exit(1);
             });
             config.enable_upnp.get_or_insert(false);
             config
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            warn!("No config.toml found, using defaults");
+            warn!("No {} found, using defaults", path);
             Config {
                 keypair_path: String::new(),
                 entrypoints: None,
@@ -191,6 +193,6 @@ pub fn load_config() -> Config {
                 storage_server: None,
             }
         }
-        Err(e) => panic!("Error reading config.toml: {}", e),
+        Err(e) => panic!("Error reading {}: {}", path, e),
     }
 }
