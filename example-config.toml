@@ -34,8 +34,11 @@ shred_version = 64475
 # Optional: Enable upnp (default: false)
 #enable_upnp = true
 
-# Where to redirect HTTP GET requests to
+# Where to redirect or proxy HTTP GET requests to (default: Do not redirect or proxy)
 #storage_path = "https://your-storage-server.com"
 # or
 #storage_path = "https://your-storage-server.com/path/"
+
+# Optional: Reverse proxy GET requests instead of redirecting (default: false)
+#enable_proxy = true
 

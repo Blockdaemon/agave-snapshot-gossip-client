@@ -24,22 +24,25 @@ pub struct Config {
     pub genesis_hash: Option<String>,
     pub shred_version: Option<u16>,
 
-    // What local address to listen on
+    // What local IP to bind to and listen on
     pub listen_ip: Option<String>,
 
     // What public IP to advertise, or how to discover it
     pub public_ip: Option<String>,
     pub stun_server: Option<String>,
 
-    // What gossip and rpc ports to listen on and advertise
+    // What gossip and RPC ports to listen on and advertise
     pub gossip_port: Option<u16>,
     pub rpc_port: Option<u16>,
 
     // Punch holes in the firewall
     pub enable_upnp: Option<bool>,
 
-    // Where to redirect HTTP GET requests to
+    // Where to redirect/proxy HTTP GET requests to
     pub storage_path: Option<String>,
+
+    // Reverse proxy HTTP GET requests instead of redirecting
+    pub enable_proxy: Option<bool>,
 }
 
 fn default_keypair_path() -> String {
@@ -57,6 +60,7 @@ pub struct ResolvedConfig {
     pub rpc_port: u16,
     pub enable_upnp: bool,
     pub storage_path: String,
+    pub enable_proxy: bool,
 }
 
 #[derive(Debug)]
@@ -179,6 +183,7 @@ impl Config {
             rpc_port: self.rpc_port.unwrap_or(DEFAULT_RPC_PORT),
             enable_upnp: self.enable_upnp.unwrap_or(false),
             storage_path,
+            enable_proxy: self.enable_proxy.unwrap_or(false),
         })
     }
 }
@@ -192,6 +197,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
                 std::process::exit(1);
             });
             config.enable_upnp.get_or_insert(false);
+            config.enable_proxy.get_or_insert(false);
             config
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -208,6 +214,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
                 genesis_hash: None,
                 shred_version: None,
                 storage_path: None,
+                enable_proxy: None,
             }
         }
         Err(e) => panic!("Error reading {}: {}", path, e),

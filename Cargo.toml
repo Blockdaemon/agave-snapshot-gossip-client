@@ -24,12 +24,16 @@ clap = { version = "~4", features = ["derive"] }
 dns-lookup = "~2"
 env_logger = "*"
 get_if_addrs = "*"
+hyper = { version = "~0.14", features = ["full"] }
+hyper-rustls = "*"
 igd = "*"
 jsonrpc-core = "~18"
 jsonrpc-http-server = "~18"
 lazy_static = "~1"
 log = "*"
 regex = "~1"
+rustls = "*"
+rustls-native-certs = "*"
 serde = { version = "~1", features = ["derive"] }
 signal-hook = "*"
 stun-client = "*"

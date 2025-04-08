@@ -5,13 +5,15 @@ use std::sync::Arc;
 use jsonrpc_core::futures::{future, future::ready};
 use jsonrpc_core::IoHandler;
 use jsonrpc_http_server::{
-    hyper::{Body, Method, Request, Response, StatusCode},
+    hyper::{header, Body, Method, Request, Response, StatusCode},
     RequestMiddlewareAction, ServerBuilder,
 };
 use lazy_static::lazy_static;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use url::Url;
+
+use crate::http_proxy;
 
 pub struct RpcServer {
     version: Arc<String>,
@@ -19,6 +21,7 @@ pub struct RpcServer {
     slot: Arc<AtomicI64>,
     num_peers: Arc<AtomicI64>,
     storage_path: Arc<String>,
+    enable_proxy: bool,
 }
 
 impl RpcServer {
@@ -28,6 +31,7 @@ impl RpcServer {
         slot: Arc<AtomicI64>,
         num_peers: Arc<AtomicI64>,
         storage_path: String,
+        enable_proxy: bool,
     ) -> Self {
         Self {
             version: Arc::new(version),
@@ -35,6 +39,7 @@ impl RpcServer {
             slot: slot,
             num_peers: num_peers,
             storage_path: Arc::new(storage_path),
+            enable_proxy,
         }
     }
 
@@ -45,8 +50,12 @@ impl RpcServer {
         let slot = self.slot.clone();
         let num_peers = self.num_peers.clone();
         let storage_path = self.storage_path.clone();
+        let enable_proxy = self.enable_proxy;
 
-        info!("Starting RPC server on {} with version {}", addr, version);
+        info!(
+            "Starting RPC server on {} with version {} (proxy: {})",
+            addr, version, enable_proxy
+        );
 
         // GetVersion
         io.add_method("getVersion", move |_params| {
@@ -78,46 +87,55 @@ impl RpcServer {
             server.request_middleware(move |request: Request<Body>| -> RequestMiddlewareAction {
                 if request.method() == &Method::GET {
                     let path = request.uri().path();
-                    // Check if the path is genesis, snapshot, or incremental-snapshot
-                    if ARCHIVE_PATH.is_match(path) {
+                    // Check if the path matches the snapshot pattern
+                    if SNAPSHOT_PATH.is_match(path) {
                         // Normalize the storage path and path
-                        let new_location = match normalize_url(&storage_path, path) {
+                        let target_url_str = match normalize_url(&storage_path, path) {
                             Ok(url) => url,
                             Err(e) => {
-                                error!("{}", e);
-                                let response = Response::builder()
-                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                    .body(Body::empty())
-                                    .unwrap();
-                                return RequestMiddlewareAction::Respond {
-                                    response: Box::pin(future::ok(response)),
-                                    should_validate_hosts: true,
-                                };
+                                error!("Failed to normalize URL: {}", e);
+                                return http_proxy::respond_with_status(
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                );
                             }
                         };
 
-                        warn!("Redirecting to {}", new_location);
-                        let response = Response::builder()
-                            .status(StatusCode::TEMPORARY_REDIRECT)
-                            .header("Location", new_location)
-                            .body(Body::empty())
-                            .unwrap();
-                        return RequestMiddlewareAction::Respond {
-                            response: Box::pin(future::ok(response)),
-                            should_validate_hosts: true,
-                        };
+                        if enable_proxy {
+                            warn!("Proxying request for {} to {}", path, target_url_str);
+                            let client = http_proxy::create_proxy_client();
+                            return http_proxy::handle_proxy_request(
+                                client,
+                                request,
+                                target_url_str,
+                            );
+                        } else {
+                            // Existing Redirect Logic
+                            warn!("Redirecting request for {} to {}", path, target_url_str);
+                            let response = Response::builder()
+                                .status(StatusCode::TEMPORARY_REDIRECT)
+                                .header(header::LOCATION, target_url_str)
+                                .body(Body::empty())
+                                .unwrap();
+                            return RequestMiddlewareAction::Respond {
+                                response: Box::pin(future::ok(response)),
+                                should_validate_hosts: true,
+                            };
+                        }
+                    } else {
+                        // GET request, but path doesn't match snapshot pattern -> 404
+                        warn!(
+                            "Returning 404 for non-snapshot GET request: {}",
+                            request.uri().path()
+                        );
+                        return http_proxy::respond_with_status(StatusCode::NOT_FOUND);
                     }
-                    warn!("404 for {}", path);
-                    // Return 404 for GET requests that don't match the archive pattern
-                    let response = Response::builder()
-                        .status(StatusCode::NOT_FOUND)
-                        .body(Body::empty())
-                        .unwrap();
-                    return RequestMiddlewareAction::Respond {
-                        response: Box::pin(future::ok(response)),
-                        should_validate_hosts: true,
-                    };
                 }
+                // For non-GET requests (e.g., POST for JSON-RPC), proceed
+                debug!(
+                    "Proceeding with non-GET request: {} {}",
+                    request.method(),
+                    request.uri().path()
+                );
                 RequestMiddlewareAction::Proceed {
                     request,
                     should_continue_on_invalid_cors: true,
@@ -135,10 +153,10 @@ impl RpcServer {
 }
 
 lazy_static! {
-    static ref ARCHIVE_PATH: Regex =
+    static ref SNAPSHOT_PATH: Regex =
         Regex::new(r"^/(genesis|snapshot|incremental-snapshot).*\.tar\.(bz2|zst|gz)$")
             .unwrap_or_else(|e| {
-                error!("Failed to compile archive path regex: {}", e);
+                error!("Failed to compile snapshot path regex: {}", e);
                 std::process::exit(1);
             });
 }

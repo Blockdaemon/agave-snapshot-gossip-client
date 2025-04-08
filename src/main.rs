@@ -1,6 +1,7 @@
 mod config;
 mod constants;
 mod gossip;
+mod http_proxy;
 mod rpc;
 mod stun;
 mod upnp;
@@ -150,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         slot.clone(),
         num_peers.clone(),
         resolved.storage_path,
+        resolved.enable_proxy,
     );
     let _rpc_server = rpc_server.start(rpc_listen);
     info!("Started RPC server");
