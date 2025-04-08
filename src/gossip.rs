@@ -45,7 +45,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
         let mut connected = false;
         while !exit.load(std::sync::atomic::Ordering::SeqCst) {
             let peer_count = self.all_peers().len();
-            if peer_count > 1 && !connected {
+            if peer_count > 2 && !connected {
                 connected = true;
                 warn!("Connected to gossip, {} peers", peer_count);
             }

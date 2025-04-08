@@ -170,9 +170,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Signaling gossip service and monitor to exit...");
     // Signal exit to gossip service and monitor
     exit.store(true, std::sync::atomic::Ordering::SeqCst);
-    // Join gossip service
-    gossip_service.join().unwrap();
-    info!("Gossip service shutdown complete");
 
     // Wait for monitor to complete
     monitor_handle.await.unwrap_or_else(|e| {
@@ -180,6 +177,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     });
     info!("Gossip monitor shutdown complete");
+
+    // Join gossip service
+    gossip_service.join().unwrap();
+    info!("Gossip service shutdown complete");
 
     warn!("Shutting down...");
     std::process::exit(0);
