@@ -14,6 +14,7 @@ use crate::constants::{
 use crate::stun::{StunClient, StunError};
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default = "default_keypair_path")]
     pub keypair_path: String,
