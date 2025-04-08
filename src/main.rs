@@ -6,9 +6,9 @@ mod stun;
 mod upnp;
 
 use clap::Parser;
-use easy_upnp::PortMappingProtocol;
 use env_logger;
 use gossip::{make_gossip_node, GossipMonitor};
+use igd::PortMappingProtocol;
 use log::{error, info, warn};
 use rpc::RpcServer;
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
@@ -92,10 +92,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Try to set up UPnP port forwarding BEFORE signal handler
     if resolved.enable_upnp {
-        if let Err(e) = upnp::setup_port_forwarding(vec![
-            (resolved.gossip_port, PortMappingProtocol::UDP),
-            (resolved.rpc_port, PortMappingProtocol::TCP),
-        ]) {
+        if let Err(e) = upnp::setup_port_forwarding(
+            vec![
+                (resolved.gossip_port, PortMappingProtocol::UDP),
+                (resolved.rpc_port, PortMappingProtocol::TCP),
+            ],
+            None,
+        ) {
             error!("Failed to set up UPnP port forwarding: {}", e);
         }
     }
@@ -158,7 +161,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Clean up port forwarding if enabled
     if resolved.enable_upnp {
-        upnp::cleanup_port_forwarding();
+        if let Err(e) = upnp::cleanup_port_forwarding() {
+            error!("Failed to cleanup UPnP port forwarding: {}", e);
+        }
     }
 
     // Stop RPC server
