@@ -5,19 +5,20 @@ mod rpc;
 mod stun;
 mod upnp;
 
-use clap::Parser;
-use env_logger;
-use gossip::{make_gossip_node, GossipMonitor};
-use igd::PortMappingProtocol;
-use log::{error, info, warn};
-use rpc::RpcServer;
-use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
-use solana_version::Version;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicI64;
+use std::sync::atomic::{AtomicBool, AtomicI64};
 use std::sync::Arc;
 use std::thread;
+
+use clap::Parser;
+use env_logger;
+use igd::PortMappingProtocol;
+use log::{error, info, warn};
+use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
+use solana_version::Version;
+
+use gossip::{make_gossip_node, GossipMonitor};
+use rpc::RpcServer;
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, disable_version_flag = true)]

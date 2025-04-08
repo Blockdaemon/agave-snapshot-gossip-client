@@ -1,12 +1,13 @@
 // mostly does what easy-upnp does, but without the dependency on easy-upnp, so we can add a timeout to igd::search_gateway
-use anyhow::{anyhow, Result};
-use get_if_addrs;
-use igd::{PortMappingProtocol, SearchOptions};
-use log::{debug, info};
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Mutex;
 use std::time::Duration;
+
+use anyhow::{anyhow, Result};
+use get_if_addrs;
+use igd::{PortMappingProtocol, SearchOptions};
+use log::{debug, info};
 
 /// A composite key that uniquely identifies a port forwarding entry.
 /// The lower 16 bits represent the port number, and bit 16 represents the protocol (0 for UDP, 1 for TCP).

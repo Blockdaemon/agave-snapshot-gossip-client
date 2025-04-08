@@ -1,3 +1,7 @@
+use std::net::SocketAddr;
+use std::sync::atomic::AtomicI64;
+use std::sync::Arc;
+
 use jsonrpc_core::futures::{future, future::ready};
 use jsonrpc_core::IoHandler;
 use jsonrpc_http_server::{
@@ -7,9 +11,6 @@ use jsonrpc_http_server::{
 use lazy_static::lazy_static;
 use log::{error, info};
 use regex::Regex;
-use std::net::SocketAddr;
-use std::sync::atomic::AtomicI64;
-use std::sync::Arc;
 
 pub struct RpcServer {
     version: Arc<String>,

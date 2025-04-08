@@ -1,14 +1,16 @@
+use std::fs;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+use dns_lookup::lookup_host;
+use log::{error, warn};
+use serde::Deserialize;
+
 use crate::constants::{
     DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT,
     DEFAULT_STUN_SERVER, DEFAULT_TESTNET_ENTRYPOINTS, DEFAULT_TESTNET_GENESIS_HASH,
     DEFAULT_TESTNET_SHRED_VERSION,
 };
 use crate::stun::{StunClient, StunError};
-use dns_lookup::lookup_host;
-use log::{error, warn};
-use serde::Deserialize;
-use std::fs;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 #[derive(Deserialize)]
 pub struct Config {

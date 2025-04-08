@@ -1,6 +1,8 @@
+use std::net::IpAddr;
+
+use anyhow::Result;
 use dns_lookup::lookup_host;
 use log::{error, info};
-use std::net::IpAddr;
 use stun_client::*;
 
 pub struct StunClient {

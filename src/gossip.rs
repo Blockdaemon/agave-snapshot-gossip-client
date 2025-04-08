@@ -1,16 +1,14 @@
+use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::sync::Arc;
+use std::time::Duration;
+
 use log::{debug, info, warn};
-use solana_gossip::{
-    cluster_info::ClusterInfo, contact_info::ContactInfo, gossip_service::GossipService,
-};
+use solana_gossip::cluster_info::ClusterInfo;
+use solana_gossip::contact_info::ContactInfo;
+use solana_gossip::gossip_service::GossipService;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_streamer::socket::SocketAddrSpace;
-use std::net::UdpSocket;
-use std::sync::atomic::AtomicI64;
-use std::time::Duration;
-use std::{
-    net::{IpAddr, SocketAddr},
-    sync::{atomic::AtomicBool, Arc},
-};
 use tokio;
 
 trait ContactInfoDebugExt {
