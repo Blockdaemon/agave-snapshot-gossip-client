@@ -99,7 +99,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 **Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
 
 ## Known Issues
-   - The agave solana validator client may not honor HTTP redirect, so `enable_proxy` may be required (issue #17)[https://github.com/Blockdaemon/agave-solana-validator/issues/17].
+   - The agave solana validator client may not honor HTTP redirect, so `enable_proxy` may be required ([issue #17](https://github.com/Blockdaemon/agave-solana-validator/issues/17)).
    - `getSlot` returns zero ([issue #5](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/5)).
    - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
