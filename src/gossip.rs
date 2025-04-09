@@ -77,16 +77,17 @@ impl GossipMonitor for Arc<ClusterInfo> {
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
 /// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
 /// Accepts multiple entrypoints for redundancy
-/// This is a modified version of
-/// solana_gossip::gossip_service::make_gossip_node that takes an entrypoints
-/// vector instead of a single entrypoint, and an optional rpc_addr to set on the node
+/// This is a complete rewrite of solana_gossip::gossip_service::make_gossip_node
+/// Different parameters:
+/// * Entrypoints vector instead of a single entrypoint
+/// * listen_addr/public_ip instead of an optional gossip_addr
+/// * rpc_addr/rpc_pubsub_addr to add explicitly to ContactInfo
 pub fn make_gossip_node(
     keypair: Keypair,
     entrypoints: Vec<SocketAddr>,
     exit: Arc<AtomicBool>,
-    listen_ip: IpAddr,
+    listen_addr: &SocketAddr,
     public_ip: IpAddr,
-    gossip_port: u16,
     rpc_addr: Option<&SocketAddr>,
     rpc_pubsub_addr: Option<&SocketAddr>,
     shred_version: u16,
@@ -100,7 +101,7 @@ pub fn make_gossip_node(
         );
 
         // Advertise the public gossip address
-        let gossip_addr = SocketAddr::new(public_ip, gossip_port);
+        let gossip_addr = SocketAddr::new(public_ip, listen_addr.port());
         node.set_gossip(gossip_addr).unwrap_or_else(|e| {
             panic!("Failed to set gossip address: {:?} {:?}", gossip_addr, e);
         });
@@ -122,9 +123,8 @@ pub fn make_gossip_node(
         }
 
         // Do this instead of ClusterInfo:gossip_node(keypair, gossip_addr, shred_version) so we can do it after set_rpc()
-        let gossip_listen_addr = SocketAddr::new(listen_ip, gossip_port);
-        info!("Binding to gossip socket: {:?}", gossip_listen_addr);
-        let gossip_socket = UdpSocket::bind(gossip_listen_addr).unwrap();
+        info!("Binding to gossip socket: {:?}", listen_addr);
+        let gossip_socket = UdpSocket::bind(listen_addr).unwrap();
 
         (node, gossip_socket)
     };
