@@ -23,7 +23,8 @@ This project, along with [agave-snapshot-uploader](https://github.com/Blockdaemo
 
 ### Key Features
 - Gossip network integration for discovery
-- Bare minimum required RPC endpoint compatibility (`getSlot`, `getVersion`, `getGenesisHash`)
+- Can be used as an entrypoint for the gossip network
+- Bare minimum required RPC endpoint compatibility for snapshot distribution (`getSlot`, `getVersion`, `getGenesisHash`)
 - STUN support for public IP detection
 - UPnP support for NAT traversal
 
@@ -66,6 +67,9 @@ The system supports three deployment models:
    or
    ```bash
    RUST_LOG=snapshot_gossip_client=info cargo run
+   or
+   ```bash
+   RUST_LOG=solana_metrics=off,debug cargo run
    ```
 
 ### Configuration Options
