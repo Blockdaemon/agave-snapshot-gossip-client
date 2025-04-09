@@ -1,56 +1,37 @@
-use hyper_rustls::HttpsConnector;
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use jsonrpc_core::futures::{future, FutureExt};
 use jsonrpc_http_server::{
     hyper::{
-        self, // Import hyper itself to use hyper::Error
+        self,
         client::{connect::Connect, HttpConnector},
         header::{self, HeaderName},
-        Body,
-        Client,
-        Request,
-        Response,
-        StatusCode,
-        Uri,
+        Body, Client, Request, Response, StatusCode, Uri,
     },
     RequestMiddlewareAction,
 };
 use log::{debug, error};
-use rustls::RootCertStore; // Re-import RootCertStore
+use rustls::RootCertStore;
+use rustls_native_certs;
 
 // Function to create the HTTPS-capable hyper client using rustls
 pub fn create_proxy_client() -> Client<HttpsConnector<HttpConnector>> {
     // Load native certs
     let mut root_cert_store = RootCertStore::empty();
-    match rustls_native_certs::load_native_certs() {
-        Ok(certs) => {
-            for cert in certs {
-                // Add certificate to the store, ignore errors for now
-                let _ = root_cert_store.add(&rustls::Certificate(cert.0));
-            }
-        }
-        Err(e) => {
-            error!(
-                "Could not load native system certificates for rustls: {}",
-                e
-            );
-            // Potentially handle this error more gracefully, e.g., return an error
-        }
+    let certs = rustls_native_certs::load_native_certs();
+    for cert in certs.certs {
+        let _ = root_cert_store.add(cert);
     }
 
-    // Configure rustls
-    let rustls_config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_root_certificates(root_cert_store) // Use the populated store
-        .with_no_client_auth();
-
     // Build HttpsConnector using the rustls config and http connector
-    let https = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_tls_config(rustls_config)
-        .https_or_http() // Allow both HTTPS and HTTP
-        .enable_http1() // Enable HTTP/1 (required by builder state)
-        .build();
+    let mut http = HttpConnector::new();
+    http.enforce_http(false);
+    let https = HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .wrap_connector(http);
 
-    Client::builder().build::<_, Body>(https)
+    Client::builder().build(https)
 }
 
 // Helper to create a simple status code response

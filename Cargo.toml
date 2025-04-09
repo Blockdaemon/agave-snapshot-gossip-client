@@ -24,11 +24,13 @@ clap = { version = "~4", features = ["derive"] }
 dns-lookup = "~2"
 env_logger = "*"
 get_if_addrs = "*"
+# we're stuck here due to jsonrpc-http-server which is abandoned
 hyper = { version = "~0.14", features = ["full"] }
-hyper-rustls = "*"
+# we're stuck here because of hyper 0.14
+hyper-rustls = { version = "~0.23", features = ["native-tokio"] }
 igd = "*"
-jsonrpc-core = "~18"
-jsonrpc-http-server = "~18"
+jsonrpc-core = "*"
+jsonrpc-http-server = "*"
 lazy_static = "~1"
 log = "*"
 regex = "~1"
