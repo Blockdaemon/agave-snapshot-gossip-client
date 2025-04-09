@@ -17,9 +17,9 @@ use rustls_native_certs;
 pub fn create_proxy_client() -> Client<HttpsConnector<HttpConnector>> {
     // Load native certs
     let mut root_cert_store = RootCertStore::empty();
-    let certs = rustls_native_certs::load_native_certs();
-    for cert in certs.certs {
-        let _ = root_cert_store.add(cert);
+    let certs = rustls_native_certs::load_native_certs().unwrap_or_default();
+    for cert in certs {
+        let _ = root_cert_store.add(&rustls::Certificate(cert.0));
     }
 
     // Build HttpsConnector using the rustls config and http connector

@@ -43,6 +43,75 @@ impl RpcServer {
         }
     }
 
+    fn handle_snapshot_request(
+        request: Request<Body>,
+        target_url_str: String,
+        enable_proxy: bool,
+    ) -> RequestMiddlewareAction {
+        if enable_proxy {
+            warn!(
+                "Proxying request for {} to {}",
+                request.uri().path(),
+                target_url_str
+            );
+            let client = http_proxy::create_proxy_client();
+            http_proxy::handle_proxy_request(client, request, target_url_str)
+        } else {
+            warn!(
+                "Redirecting request for {} to {}",
+                request.uri().path(),
+                target_url_str
+            );
+            let response = Response::builder()
+                .status(StatusCode::TEMPORARY_REDIRECT)
+                .header(header::LOCATION, target_url_str)
+                .body(Body::empty())
+                .unwrap();
+            RequestMiddlewareAction::Respond {
+                response: Box::pin(future::ok(response)),
+                should_validate_hosts: true,
+            }
+        }
+    }
+
+    fn handle_request_middleware(
+        request: Request<Body>,
+        storage_path: Arc<String>,
+        enable_proxy: bool,
+    ) -> RequestMiddlewareAction {
+        // Handle non-GET requests
+        if request.method() != &Method::GET {
+            debug!(
+                "Proceeding with non-GET request: {} {}",
+                request.method(),
+                request.uri().path()
+            );
+            return RequestMiddlewareAction::Proceed {
+                request,
+                should_continue_on_invalid_cors: true,
+            };
+        }
+
+        let path = request.uri().path();
+
+        // Handle non-snapshot GET requests
+        if !SNAPSHOT_PATH.is_match(path) {
+            warn!("Returning 404 for non-snapshot GET request: {}", path);
+            return http_proxy::respond_with_status(StatusCode::NOT_FOUND);
+        }
+
+        // Handle snapshot requests
+        match normalize_url(&storage_path, path) {
+            Ok(target_url_str) => {
+                Self::handle_snapshot_request(request, target_url_str, enable_proxy)
+            }
+            Err(e) => {
+                error!("Failed to normalize URL: {}", e);
+                http_proxy::respond_with_status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+
     pub fn start(&self, addr: SocketAddr) -> jsonrpc_http_server::Server {
         let mut io = IoHandler::new();
         let version = self.version.clone();
@@ -84,62 +153,10 @@ impl RpcServer {
         let server = ServerBuilder::new(io);
 
         let server = if !storage_path.is_empty() {
+            let storage_path = storage_path.clone();
+            let enable_proxy = enable_proxy;
             server.request_middleware(move |request: Request<Body>| -> RequestMiddlewareAction {
-                if request.method() == &Method::GET {
-                    let path = request.uri().path();
-                    // Check if the path matches the snapshot pattern
-                    if SNAPSHOT_PATH.is_match(path) {
-                        // Normalize the storage path and path
-                        let target_url_str = match normalize_url(&storage_path, path) {
-                            Ok(url) => url,
-                            Err(e) => {
-                                error!("Failed to normalize URL: {}", e);
-                                return http_proxy::respond_with_status(
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                );
-                            }
-                        };
-
-                        if enable_proxy {
-                            warn!("Proxying request for {} to {}", path, target_url_str);
-                            let client = http_proxy::create_proxy_client();
-                            return http_proxy::handle_proxy_request(
-                                client,
-                                request,
-                                target_url_str,
-                            );
-                        } else {
-                            // Existing Redirect Logic
-                            warn!("Redirecting request for {} to {}", path, target_url_str);
-                            let response = Response::builder()
-                                .status(StatusCode::TEMPORARY_REDIRECT)
-                                .header(header::LOCATION, target_url_str)
-                                .body(Body::empty())
-                                .unwrap();
-                            return RequestMiddlewareAction::Respond {
-                                response: Box::pin(future::ok(response)),
-                                should_validate_hosts: true,
-                            };
-                        }
-                    } else {
-                        // GET request, but path doesn't match snapshot pattern -> 404
-                        warn!(
-                            "Returning 404 for non-snapshot GET request: {}",
-                            request.uri().path()
-                        );
-                        return http_proxy::respond_with_status(StatusCode::NOT_FOUND);
-                    }
-                }
-                // For non-GET requests (e.g., POST for JSON-RPC), proceed
-                debug!(
-                    "Proceeding with non-GET request: {} {}",
-                    request.method(),
-                    request.uri().path()
-                );
-                RequestMiddlewareAction::Proceed {
-                    request,
-                    should_continue_on_invalid_cors: true,
-                }
+                Self::handle_request_middleware(request, storage_path.clone(), enable_proxy)
             })
         } else {
             server
