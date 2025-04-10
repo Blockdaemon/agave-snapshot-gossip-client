@@ -107,7 +107,7 @@ impl MetadataScraper {
                     slot: 0,
                     timestamp: 0,
                     timestamp_human: "1970-01-01T00:00:00Z".to_string(),
-                    status: "unknown".to_string(),
+                    status: "completed".to_string(),
                     uploaded_by: "unknown".to_string(),
                     full_snapshot_hash: "".to_string(),
                     full_snapshot_slot: 0,
@@ -161,11 +161,22 @@ impl MetadataScraper {
             ))
         })?;
 
-        if self.validate_genesis_hash && info.genesis_hash != self.expected_genesis_hash {
-            return Err(ScraperError::NetworkMismatch(format!(
-                "Genesis hash got {}, expected {}",
-                info.genesis_hash, self.expected_genesis_hash
+        if info.status != "completed" {
+            return Err(ScraperError::NetworkError(format!(
+                "Snapshot status is \"{}\", expected \"completed\"",
+                info.status
             )));
+        }
+
+        if info.genesis_hash != self.expected_genesis_hash {
+            let err = format!(
+                "Genesis hash is {}, expected {}",
+                info.genesis_hash, self.expected_genesis_hash
+            );
+            if self.validate_genesis_hash {
+                return Err(ScraperError::NetworkMismatch(err));
+            }
+            error!("{}, ignoring", err);
         }
 
         Ok(info)
