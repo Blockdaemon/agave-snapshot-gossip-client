@@ -10,9 +10,11 @@ use std::str::FromStr;
 use tokio::sync::RwLock;
 use url::Url;
 
-use crate::constants::{DEFAULT_SCRAPER_USER_AGENT, DEFAULT_SNAPSHOT_INFO_PATH};
+use crate::constants::{
+    DEFAULT_SCRAPER_CACHE_TTL_SECS, DEFAULT_SCRAPER_USER_AGENT, DEFAULT_SNAPSHOT_INFO_PATH,
+};
 
-const CACHE_DURATION: Duration = Duration::from_secs(5);
+const CACHE_DURATION: Duration = Duration::from_secs(DEFAULT_SCRAPER_CACHE_TTL_SECS);
 
 #[derive(Debug)]
 pub enum ScraperError {
@@ -116,7 +118,7 @@ impl MetadataScraper {
                     incremental_snapshot_slot: 0,
                     incremental_snapshot_url: "".to_string(),
                 },
-                Instant::now() - CACHE_DURATION * 2,
+                Instant::now() - CACHE_DURATION * 2, // Make sure the cache starts expired
             )),
             validate_genesis_hash: false, // TODO: make this an option
         }
@@ -184,7 +186,7 @@ impl MetadataScraper {
 
     pub async fn get_cached_snapshot_info(&self) -> SnapshotInfo {
         let cache = self.cache.read().await;
-        if cache.1.elapsed() < Duration::from_secs(5) {
+        if cache.1.elapsed() < CACHE_DURATION {
             return cache.0.clone();
         }
         drop(cache);
