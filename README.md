@@ -103,7 +103,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 **Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
 
 ## Known Issues
-   - `getSlot` returns zero until the snapshot uploader puts a `.well-known.json` or `.well-known/snapshot-metadata.json` (name TBD) file on the storage path (uploader [issue #1](https://github.com/Blockdaemon/agave-snapshot-uploader/issues/1)).
+   - `getSlot` returns zero until the snapshot uploader puts a `latest.json` file on the storage path (uploader [issue #1](https://github.com/Blockdaemon/agave-snapshot-uploader/issues/1)).
    - The agave solana validator client may not honor HTTP redirect, so `enable_proxy` may be required ([issue #17](https://github.com/Blockdaemon/agave-solana-gossip-client/issues/17)).
    - We should probably not use STUN. Agave does it without STUN ([issue #18](https://github.com/Blockdaemon/agave-solana-gossip-client/issues/18)).
    - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.

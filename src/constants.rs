@@ -20,7 +20,7 @@ pub const DEFAULT_TESTNET_ENTRYPOINTS: &[&str] = &[
 pub const DEFAULT_TESTNET_GENESIS_HASH: &str = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY";
 pub const DEFAULT_TESTNET_SHRED_VERSION: u16 = 64475;
 
-pub const DEFAULT_SNAPSHOT_INFO_PATH: &str = ".well-known.json";
+pub const DEFAULT_SNAPSHOT_INFO_PATH: &str = "latest.json";
 
 lazy_static! {
     pub static ref SNAPSHOT_REGEX: Regex =
