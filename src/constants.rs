@@ -1,4 +1,5 @@
 pub const DEFAULT_CONFIG_PATH: &str = "config.toml";
+pub const DEFAULT_KEYPAIR_PATH: &str = "keypair.json";
 pub const DEFAULT_GOSSIP_PORT: u16 = 8001;
 pub const DEFAULT_RPC_PORT: u16 = 8899;
 pub const DEFAULT_STUN_SERVER: &str = "stun.l.google.com";

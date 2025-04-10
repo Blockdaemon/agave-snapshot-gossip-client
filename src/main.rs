@@ -75,19 +75,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     env_logger::init();
     let config = config::load_config(Some(&cli.config));
-    let node_keypair = read_keypair_file(&config.keypair_path).unwrap_or_else(|err| {
+    let resolved = config.resolve().await.map_err(|e| {
+        error!("Failed to resolve configuration: {:?}", e);
+        e
+    })?;
+
+    let node_keypair = read_keypair_file(&resolved.keypair_path).unwrap_or_else(|err| {
         warn!(
             "{} not found, generating new keypair: {}",
-            config.keypair_path, err
+            resolved.keypair_path, err
         );
         Keypair::new()
     });
     info!("Our pubkey: {}", node_keypair.pubkey());
 
-    let resolved = config.resolve().await.map_err(|e| {
-        error!("Failed to resolve configuration: {:?}", e);
-        e
-    })?;
     info!("Public address: {}", resolved.public_ip);
 
     if resolved.entrypoints.is_empty() {

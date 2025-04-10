@@ -7,17 +7,16 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::constants::{
-    DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, DEFAULT_STUN_PORT,
-    DEFAULT_STUN_SERVER, DEFAULT_TESTNET_ENTRYPOINTS, DEFAULT_TESTNET_GENESIS_HASH,
-    DEFAULT_TESTNET_SHRED_VERSION,
+    DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_KEYPAIR_PATH, DEFAULT_RPC_PORT,
+    DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, DEFAULT_TESTNET_ENTRYPOINTS,
+    DEFAULT_TESTNET_GENESIS_HASH, DEFAULT_TESTNET_SHRED_VERSION,
 };
 use crate::stun::{StunClient, StunError};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    #[serde(default = "default_keypair_path")]
-    pub keypair_path: String,
+    pub keypair_path: Option<String>,
 
     // What network to connect to
     pub entrypoints: Option<Vec<String>>,
@@ -45,12 +44,9 @@ pub struct Config {
     pub enable_proxy: Option<bool>,
 }
 
-fn default_keypair_path() -> String {
-    "keypair.json".to_string()
-}
-
 #[derive(Clone)]
 pub struct ResolvedConfig {
+    pub keypair_path: String,
     pub entrypoints: Vec<SocketAddr>,
     pub genesis_hash: String,
     pub shred_version: u16,
@@ -167,6 +163,10 @@ impl Config {
         }
 
         Ok(ResolvedConfig {
+            keypair_path: self
+                .keypair_path
+                .clone()
+                .unwrap_or_else(|| DEFAULT_KEYPAIR_PATH.to_string()),
             entrypoints,
             genesis_hash: self
                 .genesis_hash
@@ -203,7 +203,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             warn!("No {} found, using defaults", path);
             Config {
-                keypair_path: String::new(),
+                keypair_path: None,
                 entrypoints: None,
                 stun_server: None,
                 public_ip: None,
