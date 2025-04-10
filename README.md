@@ -67,6 +67,7 @@ The system supports three deployment models:
    or
    ```bash
    RUST_LOG=snapshot_gossip_client=info cargo run
+   ```
    or
    ```bash
    RUST_LOG=solana_metrics=off,debug cargo run
