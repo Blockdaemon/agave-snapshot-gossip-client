@@ -3,7 +3,7 @@ set -e
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <version>"
-    echo "Example: $0 1.0.0"
+    echo "Example: $0 $(git describe --tags --abbrev=0 | sed 's/v//' | awk -F. '{print $1"."$2"."$3+1}')"
     exit 1
 fi
 
