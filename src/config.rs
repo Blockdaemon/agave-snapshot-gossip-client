@@ -1,10 +1,11 @@
 use std::fs;
 use std::net::{IpAddr, SocketAddr};
+use std::str::FromStr;
 
 use dns_lookup::lookup_host;
+use hyper::Uri;
 use log::{error, warn};
 use serde::Deserialize;
-use url::Url;
 
 use crate::constants::{
     DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_KEYPAIR_PATH, DEFAULT_LISTEN_IP,
@@ -55,7 +56,7 @@ pub struct ResolvedConfig {
     pub gossip_port: u16,
     pub rpc_port: u16,
     pub enable_upnp: bool,
-    pub storage_path: Option<Url>,
+    pub storage_path: Option<Uri>,
     pub enable_proxy: bool,
 }
 
@@ -151,7 +152,7 @@ impl Config {
 
         let storage_path = match self.storage_path.as_deref() {
             None => None,
-            Some(s) => Some(Url::parse(s).map_err(|e| {
+            Some(s) => Some(Uri::from_str(s).map_err(|e| {
                 ConfigError::ParseError(format!("Invalid storage path URL: {}", e))
             })?),
         };

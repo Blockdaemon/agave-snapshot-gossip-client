@@ -20,7 +20,7 @@ use solana_version::Version;
 
 use gossip::{make_gossip_node, GossipMonitor};
 use rpc::RpcServer;
-use scraper::{AtomicNetworkInfo, MetadataScraper};
+use scraper::MetadataScraper;
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, disable_version_flag = true)]
@@ -148,10 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     info!("Started monitor service");
 
-    let scraper = MetadataScraper::new(
-        resolved.storage_path,
-        AtomicNetworkInfo::new(resolved.shred_version, resolved.genesis_hash),
-    );
+    let scraper = MetadataScraper::new(resolved.storage_path, resolved.genesis_hash);
     let rpc_server = RpcServer::new(
         Arc::new(scraper),
         Version::default().to_string(),

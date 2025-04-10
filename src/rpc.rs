@@ -64,27 +64,21 @@ impl RpcServer {
         }
 
         // Handle snapshot GET requests
-        match scraper.build_url(request_path).await {
-            Ok(target_url) => {
+        match scraper.build_uri(request.uri()).await {
+            Ok(target_uri) => {
                 if enable_proxy {
                     let client = http_proxy::create_proxy_client();
-                    // Ugly. Convert Url to string and back to Uri
-                    http_proxy::handle_proxy_request(
-                        client,
-                        request,
-                        target_url.as_str().parse().unwrap(),
-                    )
-                    .await
+                    http_proxy::handle_proxy_request(client, request, target_uri).await
                 } else {
                     Ok(Response::builder()
                         .status(StatusCode::TEMPORARY_REDIRECT)
-                        .header(header::LOCATION, target_url.as_str())
+                        .header(header::LOCATION, target_uri.to_string())
                         .body(Body::empty())
                         .unwrap())
                 }
             }
             Err(e) => {
-                error!("Failed to build URL: {}", e);
+                error!("Failed to build URI: {}", e);
                 Ok(Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::empty())

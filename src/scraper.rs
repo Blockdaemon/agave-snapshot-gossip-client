@@ -1,15 +1,16 @@
-use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::Arc;
+use std::error::Error;
 use std::time::{Duration, Instant};
 
+use hyper::Uri;
 use log::{debug, error, info};
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
+use std::str::FromStr;
 use tokio::sync::RwLock;
-use url::{ParseError, Url};
+use url::Url;
 
-use crate::constants::DEFAULT_SNAPSHOT_INFO_PATH;
+use crate::constants::{DEFAULT_SCRAPER_USER_AGENT, DEFAULT_SNAPSHOT_INFO_PATH};
 
 const CACHE_DURATION: Duration = Duration::from_secs(5);
 
@@ -32,51 +33,33 @@ impl std::fmt::Display for ScraperError {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct NetworkInfo {
-    pub shred_version: u16,
-    pub genesis_hash: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct AtomicNetworkInfo {
-    pub shred_version: Arc<AtomicU16>,
-    pub genesis_hash: Arc<String>,
-}
-
-impl AtomicNetworkInfo {
-    pub fn new(shred_version: u16, genesis_hash: String) -> Self {
-        Self {
-            shred_version: Arc::new(AtomicU16::new(shred_version)),
-            genesis_hash: Arc::new(genesis_hash),
-        }
-    }
-
-    pub fn get(&self) -> NetworkInfo {
-        NetworkInfo {
-            shred_version: self.shred_version.load(Ordering::SeqCst),
-            genesis_hash: (*self.genesis_hash).clone(),
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SnapshotInfo {
+    pub solana_version: String,
+    pub solana_feature_set: u32,
     pub genesis_hash: String,
-    pub shred_version: u16,
-    pub slot: i64,
-    pub full: Option<String>,
-    pub incremental: Option<String>,
+    pub slot: u64,
+    pub timestamp: u64,
+    pub timestamp_human: String,
+    pub status: String,
+    pub uploaded_by: String,
+    pub full_snapshot_hash: String,
+    pub full_snapshot_slot: u64,
+    pub full_snapshot_url: String,
+    pub incremental_snapshot_hash: String,
+    pub incremental_snapshot_slot: u64,
+    pub incremental_snapshot_url: String,
 }
 
 #[derive(Debug, PartialEq)]
-enum SnapshotType {
+enum FileType {
     Genesis,
     Full,
     Incremental,
+    Metadata,
 }
 
-impl SnapshotType {
+impl FileType {
     fn from_path(path: &str) -> Result<Self, ScraperError> {
         if path.starts_with("/genesis") {
             Ok(Self::Genesis)
@@ -84,6 +67,8 @@ impl SnapshotType {
             Ok(Self::Full)
         } else if path.starts_with("/incremental-snapshot") {
             Ok(Self::Incremental)
+        } else if path.ends_with(".json") {
+            Ok(Self::Metadata)
         } else {
             Err(ScraperError::ParseError(format!(
                 "Unknown snapshot path: {}",
@@ -94,35 +79,55 @@ impl SnapshotType {
 }
 
 pub struct MetadataScraper {
-    storage_path: Option<Url>, // If not here, we'll always return the default snapshot info
+    storage_path: Option<Uri>, // If not here, we'll always return the default snapshot info
     http_client: Client,
-    expected_network_info: AtomicNetworkInfo,
+    expected_genesis_hash: String,
     cache: RwLock<(SnapshotInfo, Instant)>,
+    validate_genesis_hash: bool,
 }
 
 impl MetadataScraper {
-    pub fn storage_path(&self) -> Option<&Url> {
+    pub fn storage_path(&self) -> Option<&Uri> {
         self.storage_path.as_ref()
     }
-    pub fn new(storage_path: Option<Url>, expected_network_info: AtomicNetworkInfo) -> Self {
-        // use expected info as the defaults
-        let genesis_hash = expected_network_info.genesis_hash.to_string();
-        let shred_version = expected_network_info.shred_version.load(Ordering::SeqCst);
+    pub fn new(storage_path: Option<Uri>, expected_genesis_hash: String) -> Self {
         Self {
-            http_client: Client::new(),
+            http_client: Client::builder()
+                .use_rustls_tls()
+                .user_agent(DEFAULT_SCRAPER_USER_AGENT)
+                .build()
+                .unwrap(),
             storage_path,
-            expected_network_info,
+            expected_genesis_hash: expected_genesis_hash.clone(),
             cache: RwLock::new((
                 SnapshotInfo {
-                    genesis_hash,
-                    shred_version,
+                    solana_version: "0.0.0".to_string(),
+                    solana_feature_set: 0,
+                    genesis_hash: expected_genesis_hash, // use expected info as the default
                     slot: 0,
-                    full: None,
-                    incremental: None,
+                    timestamp: 0,
+                    timestamp_human: "1970-01-01T00:00:00Z".to_string(),
+                    status: "unknown".to_string(),
+                    uploaded_by: "unknown".to_string(),
+                    full_snapshot_hash: "".to_string(),
+                    full_snapshot_slot: 0,
+                    full_snapshot_url: "".to_string(),
+                    incremental_snapshot_hash: "".to_string(),
+                    incremental_snapshot_slot: 0,
+                    incremental_snapshot_url: "".to_string(),
                 },
                 Instant::now() - CACHE_DURATION * 2,
             )),
+            validate_genesis_hash: false, // TODO: make this an option
         }
+    }
+
+    fn join_urls(base: &Uri, path: &str) -> Result<String, ScraperError> {
+        Url::parse(&base.to_string())
+            .map_err(|e| ScraperError::NetworkError(format!("Invalid base URI: {}", e)))?
+            .join(path)
+            .map_err(|e| ScraperError::NetworkError(format!("Failed to join URIs: {}", e)))
+            .map(|url| url.to_string())
     }
 
     async fn fetch_snapshot_info(&self) -> Result<SnapshotInfo, ScraperError> {
@@ -131,13 +136,18 @@ impl MetadataScraper {
                 "Storage path is not configured".to_string(),
             ));
         }
-        let url = format!(
-            "{}/{}",
+        let url = Self::join_urls(
             self.storage_path.as_ref().unwrap(),
-            DEFAULT_SNAPSHOT_INFO_PATH
-        );
+            DEFAULT_SNAPSHOT_INFO_PATH,
+        )?;
+        info!("Fetching snapshot info from {}", url);
         let response = self.http_client.get(&url).send().await.map_err(|e| {
-            ScraperError::NetworkError(format!("Failed to fetch snapshot info {}: {}", url, e))
+            ScraperError::NetworkError(format!(
+                "Failed to fetch snapshot info from {}: {} (source: {:?})",
+                url,
+                e,
+                e.source()
+            ))
         })?;
 
         let body = response.text().await.map_err(|e| {
@@ -151,19 +161,10 @@ impl MetadataScraper {
             ))
         })?;
 
-        let expected = self.expected_network_info.get();
-
-        if info.genesis_hash != expected.genesis_hash {
+        if self.validate_genesis_hash && info.genesis_hash != self.expected_genesis_hash {
             return Err(ScraperError::NetworkMismatch(format!(
-                "Genesis hash mismatch: got {}, expected {}",
-                info.genesis_hash, expected.genesis_hash
-            )));
-        }
-
-        if info.shred_version != expected.shred_version {
-            return Err(ScraperError::NetworkMismatch(format!(
-                "Shred version mismatch: got {}, expected {}",
-                info.shred_version, expected.shred_version
+                "Genesis hash got {}, expected {}",
+                info.genesis_hash, self.expected_genesis_hash
             )));
         }
 
@@ -188,45 +189,44 @@ impl MetadataScraper {
                 let cache = self.cache.read().await;
                 let info = cache.0.clone();
                 drop(cache);
-                error!(
-                    "Failed to fetch snapshot info, using stale info {:?}: {}",
-                    info, e
-                );
+                error!("Failed to fetch snapshot info, using stale info: {}", e);
                 info
             }
         }
     }
 
-    async fn get_snapshot_path(&self, request_path: &str, snapshot_type: SnapshotType) -> String {
-        let info = self.get_cached_snapshot_info().await;
-        let path = match snapshot_type {
-            SnapshotType::Full => &info.full,
-            SnapshotType::Incremental => &info.incremental,
-            SnapshotType::Genesis => &None,
+    pub async fn build_uri(&self, request_uri: &Uri) -> Result<Uri, ScraperError> {
+        let snapshot_type = FileType::from_path(request_uri.path()).unwrap();
+        let request_path = request_uri.path();
+        let uri_string = match snapshot_type {
+            FileType::Full | FileType::Incremental => {
+                // These provide a full URI to an arbitrary destination
+                let info = self.get_cached_snapshot_info().await;
+                debug!("{:?}", info);
+                match snapshot_type {
+                    FileType::Full => info.full_snapshot_url,
+                    FileType::Incremental => info.incremental_snapshot_url,
+                    _ => unreachable!(),
+                }
+            }
+            FileType::Genesis | FileType::Metadata => {
+                // These provide a path to a local file, prepend the storage path
+                let storage_path = self.storage_path().ok_or_else(|| {
+                    ScraperError::NetworkError("Storage path is not configured".to_string())
+                })?;
+                info!(
+                    "Got storage path {:?} to use with {}",
+                    storage_path, request_path
+                );
+                Self::join_urls(storage_path, request_path)?
+            }
         };
-        path.clone().unwrap_or_else(|| request_path.to_string())
-    }
-
-    pub async fn build_url(&self, request_path: &str) -> Result<Url, ParseError> {
-        let storage_url = self.storage_path.as_ref().ok_or(ParseError::EmptyHost)?;
-        debug!("Building URL {} {}", storage_url, request_path);
-
-        let real_path = self
-            .get_snapshot_path(request_path, SnapshotType::from_path(request_path).unwrap())
-            .await;
-        let mut storage_url = storage_url.clone();
-        debug!(
-            "Building URL with storage_url {} and request {} -> {}",
-            storage_url, request_path, real_path
+        let final_uri = Uri::from_str(&uri_string)
+            .map_err(|e| ScraperError::NetworkError(format!("Failed to parse URI: {}", e)))?;
+        info!(
+            "Converted {} ({}) to {}",
+            request_uri, request_path, final_uri
         );
-        {
-            // Add on the real path to the stoarge url, which may already have a path
-            let mut segments = storage_url
-                .path_segments_mut()
-                .map_err(|_| ParseError::SetHostOnCannotBeABaseUrl)?;
-            segments.push(&real_path.trim_start_matches('/'));
-        }
-        debug!("Built {} into {}", real_path, storage_url);
-        Ok(storage_url)
+        Ok(final_uri)
     }
 }

@@ -21,8 +21,11 @@ pub const DEFAULT_TESTNET_GENESIS_HASH: &str = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z
 pub const DEFAULT_TESTNET_SHRED_VERSION: u16 = 64475;
 
 pub const DEFAULT_SNAPSHOT_INFO_PATH: &str = "latest.json";
+pub const DEFAULT_SCRAPER_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
 
 lazy_static! {
-    pub static ref SNAPSHOT_REGEX: Regex =
-        Regex::new(r"^/(genesis|snapshot|incremental-snapshot).*\.tar\.(bz2|zst|gz)$").unwrap();
+    pub static ref SNAPSHOT_REGEX: Regex = Regex::new(
+        r"^/(genesis|snapshot|incremental-snapshot).*\.tar\.(bz2|zst|gz)$|^/latest\.json$"
+    )
+    .unwrap();
 }
