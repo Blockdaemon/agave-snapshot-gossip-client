@@ -72,10 +72,7 @@ impl FileType {
         } else if path.ends_with(".json") {
             Ok(Self::Metadata)
         } else {
-            Err(ScraperError::ParseError(format!(
-                "Unknown snapshot path: {}",
-                path
-            )))
+            Err(ScraperError::ParseError(format!("Unknown path: {}", path)))
         }
     }
 }

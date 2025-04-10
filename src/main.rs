@@ -194,6 +194,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Gossip monitor shutdown complete");
 
     // Join gossip service
+    info!("Waiting for gossip service shutdown...");
     gossip_service.join().unwrap();
     info!("Gossip service shutdown complete");
 
