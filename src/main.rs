@@ -3,13 +3,13 @@ mod constants;
 mod gossip;
 mod http_proxy;
 mod rpc;
+mod scraper;
 mod stun;
 mod upnp;
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
-use std::thread;
 
 use clap::Parser;
 use env_logger;
@@ -20,6 +20,7 @@ use solana_version::Version;
 
 use gossip::{make_gossip_node, GossipMonitor};
 use rpc::RpcServer;
+use scraper::{AtomicNetworkInfo, MetadataScraper};
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, disable_version_flag = true)]
@@ -122,38 +123,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (gossip_service, cluster_info) = make_gossip_node(
         node_keypair,
         resolved.entrypoints,
-        exit.clone(),          // clone #2
-        listen_addr,           // listen_ip:gossip_port
-        resolved.public_ip,    // Issue #18: how does the stock agave validator do this?
-        Some(rpc_addr),        // public_ip:rpc_port
-        Some(rpc_pubsub_addr), // public_ip:rpc_port+1
-        resolved.shred_version,
+        exit.clone(),           // clone #2
+        listen_addr,            // listen_ip:gossip_port
+        resolved.public_ip,     // Issue #18: how does the stock agave validator do this?
+        Some(rpc_addr),         // public_ip:rpc_port
+        Some(rpc_pubsub_addr),  // public_ip:rpc_port+1
+        resolved.shred_version, // initial shred version to start with
     );
     info!("Started gossip service");
 
     info!("Starting monitor service...");
     let num_peers = Arc::new(AtomicI64::new(0));
+    let shred_version = Arc::new(AtomicU16::new(0));
     let monitor_handle = tokio::spawn({
         let cluster_info = cluster_info.clone();
         let exit = exit.clone(); // clone #3
-        let num_peers = num_peers.clone();
+        let num_peers = num_peers.clone(); // modifed by gossip monitor
+        let shred_version = shred_version.clone(); // modifed by gossip monitor
         async move {
-            cluster_info.monitor_gossip(exit, num_peers).await;
+            cluster_info
+                .monitor_gossip(exit, num_peers, shred_version)
+                .await;
         }
     });
     info!("Started monitor service");
 
-    let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
-    info!("Starting RPC server on {}...", rpc_listen);
-    let slot = Arc::new(AtomicI64::new(0));
-    let rpc_server = RpcServer::new(
-        Version::default().to_string(),
-        resolved.genesis_hash,
-        slot.clone(),
-        num_peers.clone(),
+    let scraper = MetadataScraper::new(
         resolved.storage_path,
+        AtomicNetworkInfo::new(resolved.shred_version, resolved.genesis_hash),
+    );
+    let rpc_server = RpcServer::new(
+        Arc::new(scraper),
+        Version::default().to_string(),
+        num_peers.clone(),
         resolved.enable_proxy,
     );
+    let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
+    info!("Starting RPC server on {}...", rpc_listen);
     let _rpc_server = rpc_server.start(rpc_listen);
     info!("Started RPC server");
 
@@ -174,7 +180,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Stop RPC server
     info!("Stopping RPC server...");
-    thread::spawn(move || {
+    // drop runtime outside the async context
+    std::thread::spawn(move || {
         _rpc_server.close();
     });
 

@@ -1,5 +1,7 @@
+use std::future::Future;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,45 +34,73 @@ impl ContactInfoDebugExt for ContactInfo {
 }
 
 pub trait GossipMonitor {
-    async fn monitor_gossip(&self, exit: Arc<AtomicBool>, num_peers: Arc<AtomicI64>);
+    fn monitor_gossip(
+        &self,
+        exit: Arc<AtomicBool>,
+        num_peers: Arc<AtomicI64>,
+        shred_version: Arc<AtomicU16>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
 impl GossipMonitor for Arc<ClusterInfo> {
-    async fn monitor_gossip(&self, exit: Arc<AtomicBool>, num_peers: Arc<AtomicI64>) {
-        warn!("Connecting to gossip...");
-        let start = std::time::Instant::now();
-        let mut last_peer_count = 0;
-        let mut connected = false;
-        while !exit.load(std::sync::atomic::Ordering::SeqCst) {
-            let peer_count = self.all_peers().len();
-            if peer_count > 2 && !connected {
-                connected = true;
-                warn!("Connected to gossip, {} peers", peer_count);
-            }
+    fn monitor_gossip(
+        &self,
+        exit: Arc<AtomicBool>,
+        num_peers: Arc<AtomicI64>,
+        shred_version: Arc<AtomicU16>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            warn!("Connecting to gossip...");
+            let start = std::time::Instant::now();
+            let mut last_peer_count = 0;
+            let mut last_shred_version = 0;
+            let mut connected = false;
+            while !exit.load(std::sync::atomic::Ordering::SeqCst) {
+                let peer_count = self.all_peers().len();
+                if peer_count > 2 && !connected {
+                    connected = true;
+                    warn!("Connected to gossip, {} peers", peer_count);
+                }
 
-            if peer_count != last_peer_count {
-                info!(
-                    "Current peer count: {} (elapsed: {}s)",
-                    peer_count,
-                    start.elapsed().as_secs()
-                );
-                //debug!("TRACE\n{}", self.rpc_info_trace());
-                num_peers.store(
-                    peer_count.try_into().unwrap(),
-                    std::sync::atomic::Ordering::SeqCst,
-                );
+                let peers_changed = peer_count != last_peer_count;
+
                 for (peer, _) in self.all_peers() {
                     let is_me = peer.pubkey() == &self.id();
-                    if is_me || (peer.shred_version() != 0 && peer.rpc().is_some()) {
+                    let shred_ver = peer.shred_version();
+
+                    // Update shred version if it's me and has changed
+                    if is_me && shred_ver != 0 && shred_ver != last_shred_version {
+                        debug!(
+                            "changed shred version {} -> {}",
+                            last_shred_version, shred_ver
+                        );
+                        shred_version.store(shred_ver, std::sync::atomic::Ordering::SeqCst);
+                        last_shred_version = shred_ver;
+                    }
+
+                    // Log peer info if peers changed and it's either me or a valid peer
+                    if peers_changed && (is_me || (shred_ver != 0 && peer.rpc().is_some())) {
                         debug!("{}: {}", if is_me { "  me" } else { "Peer" }, peer.debug());
                     }
                 }
-                last_peer_count = peer_count;
-            }
 
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-        info!("Gossip monitor service exited");
+                if peers_changed {
+                    info!(
+                        "Current peer count: {} (elapsed: {}s)",
+                        peer_count,
+                        start.elapsed().as_secs()
+                    );
+                    num_peers.store(
+                        peer_count.try_into().unwrap(),
+                        std::sync::atomic::Ordering::SeqCst,
+                    );
+                    last_peer_count = peer_count;
+                }
+
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            info!("Gossip monitor service exited");
+        })
     }
 }
 

@@ -1,5 +1,5 @@
 use std::fs;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 
 use dns_lookup::lookup_host;
 use log::{error, warn};
@@ -7,8 +7,8 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::constants::{
-    DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_KEYPAIR_PATH, DEFAULT_RPC_PORT,
-    DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, DEFAULT_TESTNET_ENTRYPOINTS,
+    DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_KEYPAIR_PATH, DEFAULT_LISTEN_IP,
+    DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, DEFAULT_TESTNET_ENTRYPOINTS,
     DEFAULT_TESTNET_GENESIS_HASH, DEFAULT_TESTNET_SHRED_VERSION,
 };
 use crate::stun::{StunClient, StunError};
@@ -55,7 +55,7 @@ pub struct ResolvedConfig {
     pub gossip_port: u16,
     pub rpc_port: u16,
     pub enable_upnp: bool,
-    pub storage_path: String,
+    pub storage_path: Option<Url>,
     pub enable_proxy: bool,
 }
 
@@ -149,18 +149,12 @@ impl Config {
             .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut storage_path = self.storage_path.clone().unwrap_or_default();
-        if !storage_path.is_empty() {
-            let mut url = Url::parse(&storage_path)
-                .map_err(|e| ConfigError::ParseError(format!("Invalid storage path URL: {}", e)))?;
-
-            // Only remove trailing slash if there's no path component
-            if url.path() == "/" && url.query().is_none() && url.fragment().is_none() {
-                url.set_path("");
-            }
-
-            storage_path = url.to_string();
-        }
+        let storage_path = match self.storage_path.as_deref() {
+            None => None,
+            Some(s) => Some(Url::parse(s).map_err(|e| {
+                ConfigError::ParseError(format!("Invalid storage path URL: {}", e))
+            })?),
+        };
 
         Ok(ResolvedConfig {
             keypair_path: self
@@ -177,7 +171,7 @@ impl Config {
                 .listen_ip
                 .as_ref()
                 .and_then(|ip| ip.parse().ok())
-                .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+                .unwrap_or(DEFAULT_LISTEN_IP),
             public_ip,
             gossip_port: self.gossip_port.unwrap_or(DEFAULT_GOSSIP_PORT),
             rpc_port: self.rpc_port.unwrap_or(DEFAULT_RPC_PORT),
