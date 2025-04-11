@@ -2,7 +2,7 @@
 name = "agave-snapshot-gossip-client"
 description = "Snapshot gossip client"
 authors = ["Blockdaemon", "Nye Liu"]
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 repository = "https://github.com/Blockdaemon/agave-snapshot-gossip-client"
 license = "Apache-2.0"
