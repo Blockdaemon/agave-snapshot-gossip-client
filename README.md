@@ -24,7 +24,8 @@ This project, along with [agave-snapshot-uploader](https://github.com/Blockdaemo
 ### Key Features
 - Gossip network integration for discovery
 - Can be used as an entrypoint for the gossip network
-- Bare minimum required RPC endpoint compatibility for snapshot distribution (`getSlot`, `getVersion`, `getGenesisHash`)
+- Minimum required JSONRPC endpoint compatibility for snapshot distribution (`getSlot`, `getVersion`, `getGenesisHash`)
+- Additional non-standard JSONRPC methods (`getNumPeers`, `getShredVersion`)
 - STUN support for public IP detection
 - UPnP support for NAT traversal
 
@@ -89,7 +90,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 | `gossip_port`            | `8001`                    | Gossip listen port          |
 | `rpc_port`               | `8899`                    | RPC listen port             |
 | `enable_upnp`            | `false`                   | Enable UPnP port forwarding |
-| `storage_path`           | None                      | Redirect/proxy target       |
+| `storage_path`           | None                      | Redirect/proxy target URL   |
 | `enable_proxy`           | `false`                   | Reverse proxy GET requests instead of redirecting |
 
 `expected_shred_version` is used when joining the gossip network. If you have
@@ -116,6 +117,7 @@ See [Solana Cluster Information](https://docs.anza.xyz/clusters/available) for t
    - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
+   - Entrypoint suitability untested.
 
 ## License
 

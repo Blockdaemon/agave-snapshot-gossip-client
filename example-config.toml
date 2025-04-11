@@ -1,4 +1,9 @@
-# Entrypoints to connect to the gossip network (default: testnet)
+#
+# Example config.toml
+# All settings are optional except `storage_path`
+#
+
+# Optional: Entrypoints to connect to the gossip network (default: testnet)
 # If you want to override to devnet:
 #entrypoints = [
 #    "entrypoint.devnet.solana.com:8001",
@@ -8,11 +13,11 @@
 #    "entrypoint5.devnet.solana.com:8001",
 #]
 
-# Shred version (default: None)
+# Optional: Shred version (default: None)
 #expected_shred_version = 2405 (devnet)
 #expected_shred_version = 64475 (testnet)
 
-# Genesis hash (default: None)
+# Optional: Genesis hash (default: None)
 #expected_genesis_hash = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY" # testnet
 #expected_genesis_hash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" # devnet
 
@@ -38,10 +43,9 @@
 #enable_upnp = true
 
 # Where to redirect or proxy HTTP GET requests to (default: Do not redirect or proxy)
-#storage_path = "https://your-storage-server.com"
+storage_path = "https://your-storage-server.com"
 # or
 #storage_path = "https://your-storage-server.com/path/"
 
 # Optional: Reverse proxy GET requests instead of redirecting (default: false)
 #enable_proxy = true
-
