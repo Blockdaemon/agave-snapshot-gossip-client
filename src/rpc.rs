@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicI64;
+use std::sync::atomic::{AtomicI64, AtomicU16};
 use std::sync::Arc;
 
 use jsonrpc_core::futures::future::ready;
@@ -18,6 +18,7 @@ pub struct RpcServer {
     scraper: Arc<MetadataScraper>,
     version: String,
     num_peers: Arc<AtomicI64>,
+    shred_version: Arc<AtomicU16>,
     enable_proxy: bool,
 }
 
@@ -26,12 +27,14 @@ impl RpcServer {
         scraper: Arc<MetadataScraper>,
         version: String,
         num_peers: Arc<AtomicI64>,
+        shred_version: Arc<AtomicU16>,
         enable_proxy: bool,
     ) -> Self {
         Self {
             scraper,
             version,
             num_peers,
+            shred_version,
             enable_proxy,
         }
     }
@@ -91,6 +94,7 @@ impl RpcServer {
         let mut io = IoHandler::new();
         let version = self.version.clone();
         let num_peers = self.num_peers.clone();
+        let shred_version = self.shred_version.clone();
         let enable_proxy = self.enable_proxy;
         info!(
             "Starting RPC server on {} with version {} (proxy: {})",
@@ -127,6 +131,16 @@ impl RpcServer {
         io.add_method("getNumPeers", move |_params| {
             ready(Ok(jsonrpc_core::Value::Number(
                 num_peers.load(std::sync::atomic::Ordering::SeqCst).into(),
+            )))
+        });
+
+        // GetShredVersion - unique to us, this is not a standard Solana rpc method
+        // The gossip monitor keeps this updated.
+        io.add_method("getShredVersion", move |_params| {
+            ready(Ok(jsonrpc_core::Value::Number(
+                shred_version
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                    .into(),
             )))
         });
 

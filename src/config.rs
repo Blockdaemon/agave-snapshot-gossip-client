@@ -9,8 +9,7 @@ use serde::Deserialize;
 
 use crate::constants::{
     DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_KEYPAIR_PATH, DEFAULT_LISTEN_IP,
-    DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, DEFAULT_TESTNET_ENTRYPOINTS,
-    DEFAULT_TESTNET_GENESIS_HASH, DEFAULT_TESTNET_SHRED_VERSION,
+    DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, TESTNET_ENTRYPOINTS,
 };
 use crate::stun::{StunClient, StunError};
 
@@ -21,8 +20,8 @@ pub struct Config {
 
     // What network to connect to
     pub entrypoints: Option<Vec<String>>,
-    pub genesis_hash: Option<String>,
-    pub shred_version: Option<u16>,
+    pub expected_genesis_hash: Option<String>,
+    pub expected_shred_version: Option<u16>,
 
     // What local IP to bind to and listen on
     pub listen_ip: Option<String>,
@@ -49,8 +48,8 @@ pub struct Config {
 pub struct ResolvedConfig {
     pub keypair_path: String,
     pub entrypoints: Vec<SocketAddr>,
-    pub genesis_hash: String,
-    pub shred_version: u16,
+    pub expected_shred_version: Option<u16>,
+    pub expected_genesis_hash: Option<String>,
     pub listen_ip: IpAddr,
     pub public_ip: IpAddr,
     pub gossip_port: u16,
@@ -140,12 +139,7 @@ impl Config {
         let entrypoints = self
             .entrypoints
             .clone()
-            .unwrap_or_else(|| {
-                DEFAULT_TESTNET_ENTRYPOINTS
-                    .iter()
-                    .map(|&s| s.to_string())
-                    .collect()
-            })
+            .unwrap_or_else(|| TESTNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect())
             .into_iter()
             .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
             .collect::<Result<Vec<_>, _>>()?;
@@ -163,11 +157,8 @@ impl Config {
                 .clone()
                 .unwrap_or_else(|| DEFAULT_KEYPAIR_PATH.to_string()),
             entrypoints,
-            genesis_hash: self
-                .genesis_hash
-                .clone()
-                .unwrap_or_else(|| DEFAULT_TESTNET_GENESIS_HASH.to_string()),
-            shred_version: self.shred_version.unwrap_or(DEFAULT_TESTNET_SHRED_VERSION),
+            expected_genesis_hash: self.expected_genesis_hash.clone(),
+            expected_shred_version: self.expected_shred_version.clone(),
             listen_ip: self
                 .listen_ip
                 .as_ref()
@@ -206,8 +197,8 @@ pub fn load_config(config_path: Option<&str>) -> Config {
                 listen_ip: None,
                 gossip_port: None,
                 rpc_port: None,
-                genesis_hash: None,
-                shred_version: None,
+                expected_genesis_hash: None,
+                expected_shred_version: None,
                 storage_path: None,
                 enable_proxy: None,
             }

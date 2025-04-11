@@ -80,16 +80,15 @@ impl FileType {
 pub struct MetadataScraper {
     storage_path: Option<Uri>, // If not here, we'll always return the default snapshot info
     http_client: Client,
-    expected_genesis_hash: String,
+    expected_genesis_hash: Option<String>,
     cache: RwLock<(SnapshotInfo, Instant)>,
-    validate_genesis_hash: bool,
 }
 
 impl MetadataScraper {
     pub fn storage_path(&self) -> Option<&Uri> {
         self.storage_path.as_ref()
     }
-    pub fn new(storage_path: Option<Uri>, expected_genesis_hash: String) -> Self {
+    pub fn new(storage_path: Option<Uri>, expected_genesis_hash: Option<String>) -> Self {
         Self {
             http_client: Client::builder()
                 .use_rustls_tls()
@@ -102,7 +101,7 @@ impl MetadataScraper {
                 SnapshotInfo {
                     solana_version: "0.0.0".to_string(),
                     solana_feature_set: 0,
-                    genesis_hash: expected_genesis_hash, // use expected info as the default
+                    genesis_hash: expected_genesis_hash.unwrap_or("".to_string()), // use expected info as the default if provided
                     slot: 0,
                     timestamp: 0,
                     timestamp_human: "1970-01-01T00:00:00Z".to_string(),
@@ -117,7 +116,6 @@ impl MetadataScraper {
                 },
                 Instant::now() - CACHE_DURATION * 2, // Make sure the cache starts expired
             )),
-            validate_genesis_hash: false, // TODO: make this an option
         }
     }
 
@@ -167,15 +165,13 @@ impl MetadataScraper {
             )));
         }
 
-        if info.genesis_hash != self.expected_genesis_hash {
-            let err = format!(
-                "Genesis hash is {}, expected {}",
-                info.genesis_hash, self.expected_genesis_hash
-            );
-            if self.validate_genesis_hash {
-                return Err(ScraperError::NetworkMismatch(err));
+        if let Some(expected_genesis_hash) = &self.expected_genesis_hash {
+            if info.genesis_hash != *expected_genesis_hash {
+                return Err(ScraperError::NetworkMismatch(format!(
+                    "Genesis hash is {}, expected {}",
+                    info.genesis_hash, expected_genesis_hash
+                )));
             }
-            error!("{}, ignoring", err);
         }
 
         Ok(info)

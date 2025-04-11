@@ -62,37 +62,43 @@ The system supports three deployment models:
 
 3. Run the client:
    ```bash
-   RUST_LOG=warn cargo run
+   RUST_LOG=warn cargo run -r
    ```
    or
    ```bash
-   RUST_LOG=snapshot_gossip_client=info cargo run
+   RUST_LOG=snapshot_gossip_client=info cargo run -r
    ```
    or
    ```bash
-   RUST_LOG=solana_metrics=off,debug cargo run
+   RUST_LOG=solana_metrics=off,debug cargo run -r
    ```
 
 ### Configuration Options
 
 Use `--config <path>` to specify a custom config file location. Default is `config.toml` in the current working directory.
 
-| Option           | Default                   | Description                 |
-|------------------|---------------------------|-----------------------------|
-| `entrypoints`    | Testnet                   | Gossip network entry points |
-| `genesis_hash`   | Testnet                   | Genesis hash                |
-| `shred_version`  | Testnet                   | Shred version               |
-| `keypair_path`   | `keypair.json`            | Path to keypair file        |
-| `listen_ip`      | `0.0.0.0`                 | Local bind/listen IP        |
-| `public_ip`      | Auto (STUN)               | Public IP address           |
-| `stun_server`    | `stun.l.google.com:3478`  | STUN server address         |
-| `gossip_port`    | `8001`                    | Gossip listen port          |
-| `rpc_port`       | `8899`                    | RPC listen port             |
-| `enable_upnp`    | `false`                   | Enable UPnP port forwarding |
-| `storage_path`   | None                      | Redirect/proxy target       |
-| `enable_proxy`   | `false`                   | Reverse proxy GET requests instead of redirecting |
+| Option                   | Default                   | Description                 |
+|--------------------------|---------------------------|-----------------------------|
+| `entrypoints`            | Testnet                   | Gossip network entry points |
+| `expected_shred_version` | None                      | Expected shred version      |
+| `expected_genesis_hash`  | None                      | Expected genesis hash       |
+| `keypair_path`	   | `keypair.json`            | Path to keypair file        |
+| `listen_ip`              | `0.0.0.0`                 | Local bind/listen IP        |
+| `public_ip`              | Auto (STUN)               | Public IP address           |
+| `stun_server`            | `stun.l.google.com:3478`  | STUN server address         |
+| `gossip_port`            | `8001`                    | Gossip listen port          |
+| `rpc_port`               | `8899`                    | RPC listen port             |
+| `enable_upnp`            | `false`                   | Enable UPnP port forwarding |
+| `storage_path`           | None                      | Redirect/proxy target       |
+| `enable_proxy`           | `false`                   | Reverse proxy GET requests instead of redirecting |
 
-**Note**: If you override the default `entrypoints`, you must also specify the `genesis_hash` and `shred_version`.
+`expected_shred_version` is used when joining the gossip network. If you have
+issues connecting to gossip, try setting it to the correct network value
+
+`expected_genesis_hash` is used to verify the given `storage_path` is valid for
+the network. If not specified, no checking will be done.
+
+See [Solana Cluster Information](https://docs.anza.xyz/clusters/available) for the correct values.
 
 ### Network Requirements
 
@@ -104,6 +110,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 **Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
 
 ## Known Issues
+   - `--debug` builds may be unstable and have significantly higher memory and CPU usage. Use `-r` or `--release` to avoid this.
    - The agave solana validator client may not honor HTTP redirect, so `enable_proxy` may be required ([issue #17](https://github.com/Blockdaemon/agave-solana-gossip-client/issues/17)).
    - We should probably not use STUN. Agave does it without STUN ([issue #18](https://github.com/Blockdaemon/agave-solana-gossip-client/issues/18)).
    - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.

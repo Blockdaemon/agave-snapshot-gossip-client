@@ -1,17 +1,20 @@
 # Entrypoints to connect to the gossip network (default: testnet)
-entrypoints = [
-    "entrypoint.devnet.solana.com:8001",
-    "entrypoint2.devnet.solana.com:8001",
-    "entrypoint3.devnet.solana.com:8001",
-    "entrypoint4.devnet.solana.com:8001",
-    "entrypoint5.devnet.solana.com:8001",
-]
+# If you want to override to devnet:
+#entrypoints = [
+#    "entrypoint.devnet.solana.com:8001",
+#    "entrypoint2.devnet.solana.com:8001",
+#    "entrypoint3.devnet.solana.com:8001",
+#    "entrypoint4.devnet.solana.com:8001",
+#    "entrypoint5.devnet.solana.com:8001",
+#]
 
-# Genesis hash (default: testnet)
-genesis_hash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+# Shred version (default: None)
+#expected_shred_version = 2405 (devnet)
+#expected_shred_version = 64475 (testnet)
 
-# Shred version (default: testnet)
-shred_version = 64475
+# Genesis hash (default: None)
+#expected_genesis_hash = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY" # testnet
+#expected_genesis_hash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" # devnet
 
 # Optional: Path to keypair file (default: keypair.json)
 #keypair_path = "my-keypair.json"

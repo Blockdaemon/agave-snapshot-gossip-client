@@ -123,12 +123,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (gossip_service, cluster_info) = make_gossip_node(
         node_keypair,
         resolved.entrypoints,
-        exit.clone(),           // clone #2
-        listen_addr,            // listen_ip:gossip_port
-        resolved.public_ip,     // Issue #18: how does the stock agave validator do this?
-        Some(rpc_addr),         // public_ip:rpc_port
-        Some(rpc_pubsub_addr),  // public_ip:rpc_port+1
-        resolved.shred_version, // initial shred version to start with
+        exit.clone(),          // clone #2
+        listen_addr,           // listen_ip:gossip_port
+        resolved.public_ip,    // Issue #18: how does the stock agave validator do this?
+        Some(rpc_addr),        // public_ip:rpc_port
+        Some(rpc_pubsub_addr), // public_ip:rpc_port+1
+        resolved.expected_shred_version,
     );
     info!("Started gossip service");
 
@@ -148,11 +148,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     info!("Started monitor service");
 
-    let scraper = MetadataScraper::new(resolved.storage_path, resolved.genesis_hash);
+    let scraper = MetadataScraper::new(resolved.storage_path, resolved.expected_genesis_hash);
     let rpc_server = RpcServer::new(
         Arc::new(scraper),
         Version::default().to_string(),
         num_peers.clone(),
+        shred_version.clone(),
         resolved.enable_proxy,
     );
     let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);

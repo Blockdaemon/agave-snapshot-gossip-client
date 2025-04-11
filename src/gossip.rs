@@ -70,10 +70,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
 
                     // Update shred version if it's me and has changed
                     if is_me && shred_ver != 0 && shred_ver != last_shred_version {
-                        debug!(
-                            "changed shred version {} -> {}",
-                            last_shred_version, shred_ver
-                        );
+                        info!("Got shred version {} -> {}", last_shred_version, shred_ver);
                         shred_version.store(shred_ver, std::sync::atomic::Ordering::SeqCst);
                         last_shred_version = shred_ver;
                     }
@@ -120,14 +117,14 @@ pub fn make_gossip_node(
     public_ip: IpAddr,
     rpc_addr: Option<&SocketAddr>,
     rpc_pubsub_addr: Option<&SocketAddr>,
-    shred_version: u16,
+    shred_version: Option<u16>,
 ) -> (GossipService, Arc<ClusterInfo>) {
     let (node, gossip_socket) = {
         // Create a ContactInfo with both gossip and RPC sockets set
         let mut node = ContactInfo::new(
             keypair.pubkey(),
             solana_sdk::timing::timestamp(),
-            shred_version,
+            shred_version.unwrap_or(0),
         );
 
         // Advertise the public gossip address
