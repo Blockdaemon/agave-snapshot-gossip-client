@@ -3,11 +3,21 @@ name: PR Build
 on:
   pull_request:
     types: [opened, synchronize]
+    paths:
+      - '.github/workflows/**'
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
   push:
     branches:
       - main
     tags-ignore:
       - 'v*'  # Ignore version tags
+    paths:
+      - '.github/workflows/**'
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
 
 jobs:
   build:
