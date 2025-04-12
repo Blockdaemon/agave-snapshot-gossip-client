@@ -1,17 +1,40 @@
 use std::future::Future;
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
 use std::time::Duration;
 
-use log::{debug, error, info, warn};
+use bincode;
+use log::{debug, info, warn};
+use serde::de::{self, Deserialize as DeserializeTrait};
+use serde::{Deserialize, Serialize};
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::contact_info::ContactInfo;
 use solana_gossip::gossip_service::GossipService;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_streamer::socket::SocketAddrSpace;
 use tokio;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
+
+pub fn default_on_eof<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: de::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    let value = DeserializeTrait::deserialize(deserializer);
+    match value {
+        Ok(value) => Ok(value),
+        Err(err) => {
+            if err.to_string().contains("EOF") {
+                Ok(T::default())
+            } else {
+                Err(err)
+            }
+        }
+    }
+}
 
 trait ContactInfoDebugExt {
     fn debug(&self) -> String;
@@ -101,44 +124,44 @@ impl GossipMonitor for Arc<ClusterInfo> {
     }
 }
 
-/// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
-/// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
+/// make_gossip_node() is a complete rewrite of solana_gossip::gossip_service::make_gossip_node
 /// Accepts multiple entrypoints for redundancy
-/// This is a complete rewrite of solana_gossip::gossip_service::make_gossip_node
 /// Different parameters:
 /// * Entrypoints vector instead of a single entrypoint
-/// * listen_addr/public_ip instead of an optional gossip_addr
 /// * rpc_addr/rpc_pubsub_addr to add explicitly to ContactInfo
 pub fn make_gossip_node(
     keypair: Keypair,
     entrypoints: Vec<SocketAddr>,
     exit: Arc<AtomicBool>,
-    listen_addr: &SocketAddr,
-    public_ip: IpAddr,
+    gossip_socket: &SocketAddr, // IP portion is advertised, port portion is used with hard coded UNSPECIFIED IP to listen on
     rpc_addr: Option<&SocketAddr>,
     rpc_pubsub_addr: Option<&SocketAddr>,
     shred_version: Option<u16>,
 ) -> (GossipService, Arc<ClusterInfo>) {
-    let (node, gossip_socket) = {
+    let (node, gossip_socket, ip_echo) = {
         if shred_version.is_none() {
             // Issue #21 - Autodetecting the shred version is not yet implemented
-            error!(
+            warn!(
                 "No shred version provided, using 0. Expect problems joining the gossip network."
             );
         }
 
-        // Create a ContactInfo with both gossip and RPC sockets set
-        let mut node = ContactInfo::new(
+        // ClusterInfo::gossip_node() is an odd function.
+        // * get_gossip_port() creates a gossip socket and an ip_echo socket and binds to them. It returns
+        //   * The gossip_addr.port() that it bound both sockets to
+        //   * The gossip_socket (UDP) ip_echo (TCP) sockets it bound to
+        // * gossip_addr.ip():gossip_addr.port() is used to set the contact info
+        /*
+        fn gossip_node(pubkey, gossip_addr, shred_version){
+            let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+            let (port, (gossip_socket, ip_echo)) = Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE, bind_ip_addr);
+            let contact_info = Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port), shred_version);
+        */
+        let (mut node, gossip_socket, ip_echo) = ClusterInfo::gossip_node(
             keypair.pubkey(),
-            solana_sdk::timing::timestamp(),
+            &gossip_socket, // ip portion used to set contact info, IP hardcoded to UNSPECIFIED
             shred_version.unwrap_or(0),
         );
-
-        // Advertise the public gossip address
-        let gossip_addr = SocketAddr::new(public_ip, listen_addr.port());
-        node.set_gossip(gossip_addr).unwrap_or_else(|e| {
-            panic!("Failed to set gossip address: {:?} {:?}", gossip_addr, e);
-        });
 
         // Advertise the public RPC address if provided
         if let Some(addr) = rpc_addr {
@@ -155,13 +178,26 @@ pub fn make_gossip_node(
                 panic!("RPC PubSub address was not set despite successful set_rpc_pubsub() call!");
             }
         }
-
-        // Do this instead of ClusterInfo:gossip_node(keypair, gossip_addr, shred_version) so we can do it after set_rpc()
-        info!("Binding to gossip socket: {:?}", listen_addr);
-        let gossip_socket = UdpSocket::bind(listen_addr).unwrap();
-
-        (node, gossip_socket)
+        (node, gossip_socket, ip_echo)
     };
+
+    // Set up the IP echo server if a shred version is provided
+    if let Some(my_shred_version) = shred_version {
+        create_ip_echo_server(ip_echo, my_shred_version);
+
+        // Test the IP echo server
+        /*
+            let gossip_port = gossip_socket.local_addr().unwrap().port();
+            let test_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), gossip_port);
+            if let Ok(version) = ip_echo_client(test_addr) {
+                info!("IP echo server test successful, got shred version: {}", version);
+            } else {
+                warn!("IP echo server test failed");
+            }
+        */
+    } else {
+        warn!("No shred version provided, not setting up IP echo server");
+    }
 
     let cluster_info = ClusterInfo::new(node, Arc::new(keypair), SocketAddrSpace::Unspecified);
 
@@ -183,4 +219,95 @@ pub fn make_gossip_node(
         GossipService::new(&cluster_info, None, gossip_socket, None, true, None, exit);
 
     (gossip_service, cluster_info)
+}
+
+// this is our own implementation of the ip echo server
+const HEADER_LENGTH: usize = 4;
+const DEFAULT_IP_ECHO_SERVER_THREADS: usize = 2;
+const MAX_PORT_COUNT_PER_MESSAGE: usize = 4;
+const IP_ECHO_SERVER_RESPONSE_LENGTH: usize = 27; // Fixed length from Agave implementation
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+struct IpEchoServerMessage {
+    tcp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE],
+    udp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE],
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct IpEchoServerResponse {
+    address: IpAddr,
+    #[serde(deserialize_with = "default_on_eof")]
+    shred_version: Option<u16>,
+}
+
+fn create_ip_echo_server(ip_echo: Option<std::net::TcpListener>, shred_version: u16) {
+    let _ip_echo_server = ip_echo.map(|tcp_listener| {
+        info!(
+            "Starting IP echo server on TCP {}",
+            tcp_listener.local_addr().unwrap()
+        );
+
+        // Spawn multiple tasks in the existing runtime
+        for _ in 0..DEFAULT_IP_ECHO_SERVER_THREADS {
+            let tcp_listener = TcpListener::from_std(tcp_listener.try_clone().unwrap())
+                .expect("Failed to convert std::TcpListener");
+            tokio::spawn(async move {
+                loop {
+                    match tcp_listener.accept().await {
+                        Ok((mut socket, peer_addr)) => {
+                            let mut header = [0u8; HEADER_LENGTH];
+                            if let Err(err) = socket.read_exact(&mut header).await {
+                                info!("Failed to read header: {:?}", err);
+                                continue;
+                            }
+
+                            // Read the message
+                            let mut message_buf = vec![0u8; ip_echo_server_request_length()];
+                            if let Err(err) = socket.read_exact(&mut message_buf).await {
+                                info!("Failed to read message: {:?}", err);
+                                continue;
+                            }
+
+                            let response = IpEchoServerResponse {
+                                address: peer_addr.ip(),
+                                shred_version: Some(shred_version),
+                            };
+
+                            // Pre-allocate buffer and write header
+                            let mut bytes = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
+                            // Write response after header
+                            bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &response)
+                                .unwrap();
+
+                            if let Err(err) = socket.write_all(&bytes).await {
+                                info!("session failed: {:?}", err);
+                            }
+                            // Wait for client to close the connection
+                            let _ = socket.read(&mut [0u8; 1]).await;
+                        }
+                        Err(err) => warn!("listener accept failed: {:?}", err),
+                    }
+                }
+            });
+        }
+    });
+}
+
+fn ip_echo_server_request_length() -> usize {
+    bincode::serialized_size(&IpEchoServerMessage::default()).unwrap() as usize
+}
+
+pub async fn ip_echo_client(addr: SocketAddr) -> Result<u16, Box<dyn std::error::Error>> {
+    let mut socket = tokio::net::TcpStream::connect(addr).await?;
+
+    // Send the 4-byte header
+    socket.write_all(&[0u8; 4]).await?;
+
+    // Read the 2-byte shred version
+    let mut buf = [0u8; 2];
+    socket.read_exact(&mut buf).await?;
+
+    // Convert bytes to u16
+    let shred_version = u16::from_le_bytes(buf);
+    Ok(shred_version)
 }

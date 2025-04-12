@@ -118,6 +118,7 @@ name = "agave-snapshot-gossip-client"
 version = "0.0.7"
 dependencies = [
  "anyhow",
+ "bincode",
  "chrono",
  "clap 4.5.35",
  "dns-lookup",

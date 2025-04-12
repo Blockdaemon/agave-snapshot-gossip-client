@@ -29,6 +29,7 @@ hyper-rustls = { version = "~0.23", features = ["native-tokio"] }
 
 # Everything else
 anyhow = "~1"
+bincode = "~1"
 chrono = "*"
 clap = { version = "~4", features = ["derive"] }
 dns-lookup = "~2"

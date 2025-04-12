@@ -26,7 +26,8 @@
 # Optional: Path to keypair file (default: keypair.json)
 #keypair_path = "my-keypair.json"
 
-# Optional: listen address for RPC and gossip (default: 0.0.0.0)
+# Optional: listen address for RPC  (default: 0.0.0.0)
+# Gossip is hardcoded to 0.0.0.0 and can't be changed.
 #listen_ip = "127.0.0.1"
 
 # Optional: Public IP address (default: use STUN)

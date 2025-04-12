@@ -116,16 +116,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signal_handler = setup_signal_handler(exit.clone()); // clone #1
 
     // Start gossip service
-    let listen_addr = &SocketAddr::new(resolved.listen_ip, resolved.gossip_port);
+    let gossip_addr = &SocketAddr::new(resolved.public_ip, resolved.gossip_port); // public_ip advertised, port portion is used with hard coded UNSPECIFIED listen IP
     let rpc_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port);
     let rpc_pubsub_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port + 1);
-    info!("Starting gossip service, reporting rpc {:?}", rpc_addr);
+    info!(
+        "Starting gossip service, reporting gossip {:?}, RPC {:?}",
+        gossip_addr, rpc_addr
+    );
     let (gossip_service, cluster_info) = make_gossip_node(
         node_keypair,
         resolved.entrypoints,
-        exit.clone(),          // clone #2
-        listen_addr,           // listen_ip:gossip_port
-        resolved.public_ip,    // Issue #18: how does the stock agave validator do this?
+        exit.clone(), // clone #2
+        gossip_addr,
         Some(rpc_addr),        // public_ip:rpc_port
         Some(rpc_pubsub_addr), // public_ip:rpc_port+1
         resolved.shred_version,
