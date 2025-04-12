@@ -105,7 +105,7 @@ See [Solana Cluster Information](https://docs.anza.xyz/clusters/available) for t
 
 - Static public IP address
 - Ingress allow/forward list:
-  - UDP port 8001 (gossip) - if you need to be a publicly reachable gossip entrypoint (optional)
+  - TCP/UDP port 8001 (gossip) - if you need to be a publicly reachable gossip entrypoint (optional)
   - TCP port 8899 (RPC) - A publicly reachable RPC endpoint is required for validators to accept snapshots from you
 
 **Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
