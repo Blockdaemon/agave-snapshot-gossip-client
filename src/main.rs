@@ -128,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         resolved.public_ip,    // Issue #18: how does the stock agave validator do this?
         Some(rpc_addr),        // public_ip:rpc_port
         Some(rpc_pubsub_addr), // public_ip:rpc_port+1
-        resolved.expected_shred_version,
+        resolved.shred_version,
     );
     info!("Started gossip service");
 

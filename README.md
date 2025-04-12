@@ -81,9 +81,9 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 | Option                   | Default                   | Description                 |
 |--------------------------|---------------------------|-----------------------------|
 | `entrypoints`            | Testnet                   | Gossip network entry points |
-| `expected_shred_version` | None                      | Expected shred version      |
+| `shred_version`          | None                      | Expected shred version      |
 | `expected_genesis_hash`  | None                      | Expected genesis hash       |
-| `keypair_path`	   | `keypair.json`            | Path to keypair file        |
+| `keypair_path`           | `keypair.json`            | Path to keypair file        |
 | `listen_ip`              | `0.0.0.0`                 | Local bind/listen IP        |
 | `public_ip`              | Auto (STUN)               | Public IP address           |
 | `stun_server`            | `stun.l.google.com:3478`  | STUN server address         |
@@ -93,8 +93,10 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 | `storage_path`           | None                      | Redirect/proxy target URL   |
 | `enable_proxy`           | `false`                   | Reverse proxy GET requests instead of redirecting |
 
-`expected_shred_version` is used when joining the gossip network. If you have
-issues connecting to gossip, try setting it to the correct network value
+`shred_version` is used when joining the gossip network. If you have issues
+connecting to gossip, try setting it to the correct network value. If not
+specified, the gossip client will attempt to autodetect it, but that is
+unreliable.
 
 `expected_genesis_hash` is used to verify the given `storage_path` is valid for
 the network. If not specified, no checking will be done.
@@ -111,13 +113,14 @@ See [Solana Cluster Information](https://docs.anza.xyz/clusters/available) for t
 **Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
 
 ## Known Issues
+   - Agave validators refuse to download snapshots from us, even though we are publicly reachable [issue #20](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/20)
+   - Still not entrypoint suitable [issue #19](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/19)
    - `--debug` builds may be unstable and have significantly higher memory and CPU usage. Use `-r` or `--release` to avoid this.
-   - The agave solana validator client may not honor HTTP redirect, so `enable_proxy` may be required ([issue #17](https://github.com/Blockdaemon/agave-solana-gossip-client/issues/17)).
-   - We should probably not use STUN. Agave does it without STUN ([issue #18](https://github.com/Blockdaemon/agave-solana-gossip-client/issues/18)).
+   - The agave solana validator client may not honor HTTP redirect, so `enable_proxy` may be required ([issue #17](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/17)).
+   - We should probably not use STUN. Agave does without STUN ([issue #18](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/18)).
    - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
-   - Entrypoint suitability untested.
 
 ## License
 

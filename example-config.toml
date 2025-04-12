@@ -1,6 +1,7 @@
 #
 # Example config.toml
-# All settings are optional except `storage_path`
+# All settings are optional except `storage_path`.
+# `shred_version` is recommended but not strictly required.
 #
 
 # Optional: Entrypoints to connect to the gossip network (default: testnet)
@@ -14,8 +15,9 @@
 #]
 
 # Optional: Shred version (default: None)
-#expected_shred_version = 2405 (devnet)
-#expected_shred_version = 64475 (testnet)
+# While optional, it is highly recommended to provide it.
+#shred_version = 2405 (devnet)
+#shred_version = 64475 (testnet)
 
 # Optional: Genesis hash (default: None)
 #expected_genesis_hash = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY" # testnet

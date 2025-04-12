@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
 use std::time::Duration;
 
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::contact_info::ContactInfo;
 use solana_gossip::gossip_service::GossipService;
@@ -120,6 +120,13 @@ pub fn make_gossip_node(
     shred_version: Option<u16>,
 ) -> (GossipService, Arc<ClusterInfo>) {
     let (node, gossip_socket) = {
+        if shred_version.is_none() {
+            // Issue #21 - Autodetecting the shred version is not yet implemented
+            error!(
+                "No shred version provided, using 0. Expect problems joining the gossip network."
+            );
+        }
+
         // Create a ContactInfo with both gossip and RPC sockets set
         let mut node = ContactInfo::new(
             keypair.pubkey(),

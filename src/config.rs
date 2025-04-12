@@ -21,7 +21,7 @@ pub struct Config {
     // What network to connect to
     pub entrypoints: Option<Vec<String>>,
     pub expected_genesis_hash: Option<String>,
-    pub expected_shred_version: Option<u16>,
+    pub shred_version: Option<u16>,
 
     // What local IP to bind to and listen on
     pub listen_ip: Option<String>,
@@ -48,7 +48,7 @@ pub struct Config {
 pub struct ResolvedConfig {
     pub keypair_path: String,
     pub entrypoints: Vec<SocketAddr>,
-    pub expected_shred_version: Option<u16>,
+    pub shred_version: Option<u16>,
     pub expected_genesis_hash: Option<String>,
     pub listen_ip: IpAddr,
     pub public_ip: IpAddr,
@@ -158,7 +158,7 @@ impl Config {
                 .unwrap_or_else(|| DEFAULT_KEYPAIR_PATH.to_string()),
             entrypoints,
             expected_genesis_hash: self.expected_genesis_hash.clone(),
-            expected_shred_version: self.expected_shred_version.clone(),
+            shred_version: self.shred_version.clone(),
             listen_ip: self
                 .listen_ip
                 .as_ref()
@@ -198,7 +198,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
                 gossip_port: None,
                 rpc_port: None,
                 expected_genesis_hash: None,
-                expected_shred_version: None,
+                shred_version: None,
                 storage_path: None,
                 enable_proxy: None,
             }
