@@ -40,6 +40,9 @@
 # Optional: STUN server (default: stun.l.google.com:3478)
 #stun_server = "1.2.3.4:3478"
 
+# Optional: Whether to disable the gossip client. If true, only the RPC server will be started (default: false)
+#disable_gossip = true
+
 # Optional: Gossip listen and advertised port (default: 8001)
 #gossip_port = 8001
 

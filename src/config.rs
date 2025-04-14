@@ -7,6 +7,7 @@ use hyper::Uri;
 use log::{error, info, warn};
 use serde::Deserialize;
 
+// our local crates
 use crate::constants::{
     DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_KEYPAIR_PATH, DEFAULT_LISTEN_IP,
     DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, TESTNET_ENTRYPOINTS,
@@ -31,7 +32,8 @@ pub struct Config {
     pub enable_stun: Option<bool>,
     pub stun_server: Option<String>,
 
-    // What gossip and RPC ports to listen on and advertise
+    // Disable gossip, what gossip and RPC ports to listen on and advertise
+    pub disable_gossip: Option<bool>,
     pub gossip_port: Option<u16>,
     pub rpc_port: Option<u16>,
 
@@ -53,6 +55,7 @@ pub struct ResolvedConfig {
     pub expected_genesis_hash: Option<String>,
     pub listen_ip: IpAddr,
     pub public_ip: IpAddr,
+    pub disable_gossip: bool,
     pub gossip_port: u16,
     pub rpc_port: u16,
     pub enable_upnp: bool,
@@ -244,6 +247,7 @@ impl Config {
                 .and_then(|ip| ip.parse().ok())
                 .unwrap_or(DEFAULT_LISTEN_IP),
             public_ip,
+            disable_gossip: self.disable_gossip.unwrap_or(false),
             gossip_port: self.gossip_port.unwrap_or(DEFAULT_GOSSIP_PORT),
             rpc_port: self.rpc_port.unwrap_or(DEFAULT_RPC_PORT),
             enable_upnp: self.enable_upnp.unwrap_or(false),
@@ -276,6 +280,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
                 public_ip: None,
                 enable_upnp: None,
                 listen_ip: None,
+                disable_gossip: None,
                 gossip_port: None,
                 rpc_port: None,
                 expected_genesis_hash: None,

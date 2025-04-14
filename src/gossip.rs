@@ -5,36 +5,18 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Result;
 use log::{debug, info, warn};
-use serde::de::{self, Deserialize as DeserializeTrait};
-use serde::Deserialize;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::contact_info::ContactInfo;
 use solana_gossip::gossip_service::GossipService;
-use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
 use solana_streamer::socket::SocketAddrSpace;
 use tokio;
 
+// Our local crates
+use super::config::ResolvedConfig;
 use super::ip_echo;
-
-#[allow(dead_code)]
-pub fn default_on_eof<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: de::Deserializer<'de>,
-    T: Default + Deserialize<'de>,
-{
-    let value = DeserializeTrait::deserialize(deserializer);
-    match value {
-        Ok(value) => Ok(value),
-        Err(err) => {
-            if err.to_string().contains("EOF") {
-                Ok(T::default())
-            } else {
-                Err(err)
-            }
-        }
-    }
-}
 
 trait ContactInfoDebugExt {
     fn debug(&self) -> String;
@@ -56,7 +38,7 @@ impl ContactInfoDebugExt for ContactInfo {
     }
 }
 
-pub trait GossipMonitor {
+trait GossipMonitor {
     fn monitor_gossip(
         &self,
         exit: Arc<AtomicBool>,
@@ -91,7 +73,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
                     let is_me = peer.pubkey() == &self.id();
                     let shred_ver = peer.shred_version();
 
-                    // Update shred version if it's me and has changed
+                    // Update shred version served by JSONRPC if it's me and has changed
                     if is_me && shred_ver != 0 && shred_ver != last_shred_version {
                         info!("Got shred version {} -> {}", last_shred_version, shred_ver);
                         shred_version.store(shred_ver, std::sync::atomic::Ordering::SeqCst);
@@ -129,7 +111,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
 /// Different parameters:
 /// * Entrypoints vector instead of a single entrypoint
 /// * rpc_addr/rpc_pubsub_addr to add explicitly to ContactInfo
-pub fn make_gossip_node(
+fn make_gossip_node(
     keypair: Keypair,
     entrypoints: Vec<SocketAddr>,
     exit: Arc<AtomicBool>,
@@ -219,4 +201,59 @@ pub fn make_gossip_node(
         GossipService::new(&cluster_info, None, gossip_socket, None, true, None, exit);
 
     (gossip_service, cluster_info)
+}
+
+pub async fn start_gossip_client(
+    resolved: &ResolvedConfig,
+    exit: Arc<AtomicBool>,
+    num_peers: Arc<AtomicI64>,
+    shred_version: Arc<AtomicU16>,
+) -> Result<(tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)> {
+    let node_keypair = read_keypair_file(&resolved.keypair_path).unwrap_or_else(|err| {
+        warn!(
+            "{} not found, generating new keypair: {}",
+            resolved.keypair_path, err
+        );
+        Keypair::new()
+    });
+    info!("Our pubkey: {}", node_keypair.pubkey());
+
+    // Start gossip service
+    let gossip_addr = &SocketAddr::new(resolved.public_ip, resolved.gossip_port); // public_ip advertised, port portion is used with hard coded UNSPECIFIED listen IP
+    let rpc_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port);
+    let rpc_pubsub_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port + 1);
+    info!(
+        "Starting gossip service, reporting gossip {:?}, RPC {:?}",
+        gossip_addr, rpc_addr
+    );
+    let (gossip_service, cluster_info) = make_gossip_node(
+        node_keypair,
+        resolved.entrypoints.clone(),
+        exit.clone(),
+        gossip_addr,
+        Some(rpc_addr),        // public_ip:rpc_port
+        Some(rpc_pubsub_addr), // public_ip:rpc_port+1
+        resolved.shred_version,
+    );
+    info!("Started gossip service");
+
+    info!("Starting monitor service...");
+    let monitor_handle = tokio::spawn({
+        let cluster_info = cluster_info.clone();
+        let exit = exit.clone();
+        let num_peers = num_peers.clone();
+        let shred_version = shred_version.clone();
+        async move {
+            cluster_info
+                .monitor_gossip(exit, num_peers, shred_version)
+                .await;
+        }
+    });
+    info!("Started monitor service");
+
+    let gossip_handle = tokio::spawn(async move {
+        gossip_service.join().unwrap();
+    });
+
+    Ok((monitor_handle, gossip_handle))
 }

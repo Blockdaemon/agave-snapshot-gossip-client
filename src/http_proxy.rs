@@ -22,7 +22,7 @@ pub fn create_proxy_client() -> Client<HttpsConnector<HttpConnector>> {
 }
 
 // Helper to create a simple status code response for direct use
-pub fn create_error_response(status_code: StatusCode) -> Response<Body> {
+fn create_error_response(status_code: StatusCode) -> Response<Body> {
     Response::builder()
         .status(status_code)
         .body(Body::empty())
@@ -30,7 +30,7 @@ pub fn create_error_response(status_code: StatusCode) -> Response<Body> {
 }
 
 // Builds the outgoing request for the reverse proxy
-pub fn build_proxy_request(
+fn build_proxy_request(
     incoming_request: &Request<Body>,
     target_uri: Uri,
 ) -> Result<Request<Body>, String> {

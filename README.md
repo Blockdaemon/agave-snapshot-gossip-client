@@ -26,6 +26,7 @@ This project, along with [agave-snapshot-uploader](https://github.com/Blockdaemo
 - Can be used as an entrypoint for the gossip network
 - Minimum required JSONRPC endpoint compatibility for snapshot distribution (`getSlot`, `getVersion`, `getGenesisHash`)
 - Additional non-standard JSONRPC methods (`getNumPeers`, `getShredVersion`)
+- Native Agave support for `ip_echo` public IP and shred version discovery (client and server)
 - STUN support for public IP detection
 - UPnP support for NAT traversal
 
@@ -34,11 +35,11 @@ This project, along with [agave-snapshot-uploader](https://github.com/Blockdaemo
 The system supports three deployment models:
 
 1. **Independent Gossip Client**
-   - Separate gossip client
+   - Separate gossip client (or RPC server only)
    - Uploader sidecar on validator
 
 2. **Independent Client + Reverse Proxy**
-   - Separate gossip client
+   - Separate gossip client (or RPC server only)
    - Reverse proxy
    - Uploader sidecar on validator
 
@@ -88,6 +89,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 | `public_ip`              | Auto (STUN)               | Public IP address           |
 | `enable_stun`            | `false`                   | Use STUN to discover public IP instead of `ip_echo` |
 | `stun_server`            | `stun.l.google.com:3478`  | STUN server address         |
+| `disable_gossip`         | `false`                   | Disable gossip client       |
 | `gossip_port`            | `8001`                    | Gossip listen port          |
 | `rpc_port`               | `8899`                    | RPC listen port             |
 | `enable_upnp`            | `false`                   | Enable UPnP port forwarding |

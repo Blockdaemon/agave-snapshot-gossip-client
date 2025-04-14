@@ -12,14 +12,15 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
 
+use anyhow::Result;
 use clap::Parser;
 use env_logger;
 use igd::PortMappingProtocol;
 use log::{error, info, warn};
-use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
 use solana_version::Version;
 
-use gossip::{make_gossip_node, GossipMonitor};
+// Our local crates
+use gossip::start_gossip_client;
 use rpc::RpcServer;
 use scraper::MetadataScraper;
 
@@ -82,15 +83,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         e
     })?;
 
-    let node_keypair = read_keypair_file(&resolved.keypair_path).unwrap_or_else(|err| {
-        warn!(
-            "{} not found, generating new keypair: {}",
-            resolved.keypair_path, err
-        );
-        Keypair::new()
-    });
-    info!("Our pubkey: {}", node_keypair.pubkey());
-
     info!("Public address: {}", resolved.public_ip);
 
     if resolved.entrypoints.is_empty() {
@@ -116,49 +108,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Setting up signal handler");
     let signal_handler = setup_signal_handler(exit.clone()); // clone #1
 
-    // Start gossip service
-    let gossip_addr = &SocketAddr::new(resolved.public_ip, resolved.gossip_port); // public_ip advertised, port portion is used with hard coded UNSPECIFIED listen IP
-    let rpc_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port);
-    let rpc_pubsub_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port + 1);
-    info!(
-        "Starting gossip service, reporting gossip {:?}, RPC {:?}",
-        gossip_addr, rpc_addr
-    );
-    let (gossip_service, cluster_info) = make_gossip_node(
-        node_keypair,
-        resolved.entrypoints,
-        exit.clone(), // clone #2
-        gossip_addr,
-        Some(rpc_addr),        // public_ip:rpc_port
-        Some(rpc_pubsub_addr), // public_ip:rpc_port+1
-        resolved.shred_version,
-    );
-    info!("Started gossip service");
-
-    info!("Starting monitor service...");
     let num_peers = Arc::new(AtomicI64::new(0));
     let shred_version = Arc::new(AtomicU16::new(0));
-    let monitor_handle = tokio::spawn({
-        let cluster_info = cluster_info.clone();
-        let exit = exit.clone(); // clone #3
-        let num_peers = num_peers.clone(); // modifed by gossip monitor
-        let shred_version = shred_version.clone(); // modifed by gossip monitor
-        async move {
-            cluster_info
-                .monitor_gossip(exit, num_peers, shred_version)
-                .await;
-        }
-    });
-    info!("Started monitor service");
 
-    let scraper = MetadataScraper::new(resolved.storage_path, resolved.expected_genesis_hash);
+    // start gossip client if enabled
+    let gossip_handles = if !resolved.disable_gossip {
+        let (monitor_handle, gossip_handle) = start_gossip_client(
+            &resolved,
+            exit.clone(),
+            num_peers.clone(),
+            shred_version.clone(),
+        )
+        .await?;
+        Some((monitor_handle, gossip_handle))
+    } else {
+        shred_version.store(
+            resolved
+                .shred_version
+                .unwrap_or(resolved.shred_version.unwrap_or(0)),
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        None
+    };
+
+    // Create scraper and rpc server
+    let scraper = MetadataScraper::new(
+        resolved.storage_path.clone(),
+        resolved.expected_genesis_hash.clone(),
+    );
     let rpc_server = RpcServer::new(
         Arc::new(scraper),
         Version::default().to_string(),
-        num_peers.clone(),
-        shred_version.clone(),
+        num_peers,
+        shred_version,
         resolved.enable_proxy,
     );
+
     let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
     info!("Starting RPC server on {}...", rpc_listen);
     let _rpc_server = rpc_server.start(rpc_listen);
@@ -186,21 +171,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _rpc_server.close();
     });
 
-    info!("Signaling gossip service and monitor to exit...");
-    // Signal exit to gossip service and monitor
-    exit.store(true, std::sync::atomic::Ordering::SeqCst);
+    // Signal and  wait for gossip services if they were started
+    if let Some((monitor_handle, gossip_handle)) = gossip_handles {
+        info!("Signaling gossip service and monitor to exit...");
+        // Signal exit to gossip service and monitor
+        exit.store(true, std::sync::atomic::Ordering::SeqCst);
 
-    // Wait for monitor to complete
-    monitor_handle.await.unwrap_or_else(|e| {
-        error!("Failed to join monitor task: {}", e);
-        std::process::exit(1);
-    });
-    info!("Gossip monitor shutdown complete");
+        // Wait for monitor to complete
+        monitor_handle.await.unwrap_or_else(|e| {
+            error!("Failed to join monitor task: {}", e);
+            std::process::exit(1);
+        });
+        info!("Gossip monitor shutdown complete");
 
-    // Join gossip service
-    info!("Waiting for gossip service shutdown...");
-    gossip_service.join().unwrap();
-    info!("Gossip service shutdown complete");
+        // Join gossip service
+        info!("Waiting for gossip service shutdown...");
+        gossip_handle.await.unwrap_or_else(|e| {
+            error!("Failed to join gossip service: {}", e);
+            std::process::exit(1);
+        });
+        info!("Gossip service shutdown complete");
+    }
 
     warn!("Shutting down...");
     std::process::exit(0);
