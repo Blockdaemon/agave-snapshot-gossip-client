@@ -1,17 +1,19 @@
 [package]
 name = "agave-snapshot-gossip-client"
-description = "Snapshot gossip client"
-authors = ["Blockdaemon", "Nye Liu"]
 version = "0.0.7"
 edition = "2021"
-repository = "https://github.com/Blockdaemon/agave-snapshot-gossip-client"
+authors = ["Blockdaemon", "Nye Liu"]
+description = "Snapshot gossip client"
 license = "Apache-2.0"
+repository = "https://github.com/Blockdaemon/agave-snapshot-gossip-client"
+
+[lib]
+name = "snapshot_gossip_client"
+path = "src/lib.rs"
 
 [[bin]]
 name = "snapshot-gossip-client"
 path = "src/main.rs"
-test = false
-bench = false
 
 [dependencies]
 # upstream solana dependencies
@@ -29,6 +31,7 @@ hyper-rustls = { version = "~0.23", features = ["native-tokio"] }
 
 # Everything else
 anyhow = "~1"
+# FIXME: upgrade to 2.x?
 bincode = "~1"
 chrono = "*"
 clap = { version = "~4", features = ["derive"] }
@@ -60,3 +63,13 @@ targets = [
     "x86_64-apple-darwin",
     "aarch64-apple-darwin"
 ]
+
+[dev-dependencies]
+snapshot_gossip_client = { path = ".", package = "agave-snapshot-gossip-client" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = 'abort'
+strip = true

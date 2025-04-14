@@ -2,6 +2,7 @@ mod config;
 mod constants;
 mod gossip;
 mod http_proxy;
+mod ip_echo;
 mod rpc;
 mod scraper;
 mod stun;

@@ -64,6 +64,10 @@ jobs:
           cp target/release/snapshot-gossip-client artifacts/
           cp example-config.toml artifacts/
 
+      - name: Run tests
+        run: |
+          cargo test -- --nocapture
+
       - name: Upload artifacts
         if: ${{ inputs.upload_artifacts }}
         uses: actions/upload-artifact@v4

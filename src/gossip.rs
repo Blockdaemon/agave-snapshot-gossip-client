@@ -1,23 +1,23 @@
 use std::future::Future;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bincode;
 use log::{debug, info, warn};
 use serde::de::{self, Deserialize as DeserializeTrait};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::contact_info::ContactInfo;
 use solana_gossip::gossip_service::GossipService;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_streamer::socket::SocketAddrSpace;
 use tokio;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 
+use super::ip_echo;
+
+#[allow(dead_code)]
 pub fn default_on_eof<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -183,13 +183,13 @@ pub fn make_gossip_node(
 
     // Set up the IP echo server if a shred version is provided
     if let Some(my_shred_version) = shred_version {
-        create_ip_echo_server(ip_echo, my_shred_version);
+        ip_echo::create_ip_echo_server(ip_echo, my_shred_version);
 
         // Test the IP echo server
         /*
             let gossip_port = gossip_socket.local_addr().unwrap().port();
             let test_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), gossip_port);
-            if let Ok(version) = ip_echo_client(test_addr) {
+            if let Ok(version) = ip_echo::ip_echo_client(test_addr) {
                 info!("IP echo server test successful, got shred version: {}", version);
             } else {
                 warn!("IP echo server test failed");
@@ -219,95 +219,4 @@ pub fn make_gossip_node(
         GossipService::new(&cluster_info, None, gossip_socket, None, true, None, exit);
 
     (gossip_service, cluster_info)
-}
-
-// this is our own implementation of the ip echo server
-const HEADER_LENGTH: usize = 4;
-const DEFAULT_IP_ECHO_SERVER_THREADS: usize = 2;
-const MAX_PORT_COUNT_PER_MESSAGE: usize = 4;
-const IP_ECHO_SERVER_RESPONSE_LENGTH: usize = 27; // Fixed length from Agave implementation
-
-#[derive(Serialize, Deserialize, Default, Debug)]
-struct IpEchoServerMessage {
-    tcp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE],
-    udp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE],
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct IpEchoServerResponse {
-    address: IpAddr,
-    #[serde(deserialize_with = "default_on_eof")]
-    shred_version: Option<u16>,
-}
-
-fn create_ip_echo_server(ip_echo: Option<std::net::TcpListener>, shred_version: u16) {
-    let _ip_echo_server = ip_echo.map(|tcp_listener| {
-        info!(
-            "Starting IP echo server on TCP {}",
-            tcp_listener.local_addr().unwrap()
-        );
-
-        // Spawn multiple tasks in the existing runtime
-        for _ in 0..DEFAULT_IP_ECHO_SERVER_THREADS {
-            let tcp_listener = TcpListener::from_std(tcp_listener.try_clone().unwrap())
-                .expect("Failed to convert std::TcpListener");
-            tokio::spawn(async move {
-                loop {
-                    match tcp_listener.accept().await {
-                        Ok((mut socket, peer_addr)) => {
-                            let mut header = [0u8; HEADER_LENGTH];
-                            if let Err(err) = socket.read_exact(&mut header).await {
-                                info!("Failed to read header: {:?}", err);
-                                continue;
-                            }
-
-                            // Read the message
-                            let mut message_buf = vec![0u8; ip_echo_server_request_length()];
-                            if let Err(err) = socket.read_exact(&mut message_buf).await {
-                                info!("Failed to read message: {:?}", err);
-                                continue;
-                            }
-
-                            let response = IpEchoServerResponse {
-                                address: peer_addr.ip(),
-                                shred_version: Some(shred_version),
-                            };
-
-                            // Pre-allocate buffer and write header
-                            let mut bytes = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
-                            // Write response after header
-                            bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &response)
-                                .unwrap();
-
-                            if let Err(err) = socket.write_all(&bytes).await {
-                                info!("session failed: {:?}", err);
-                            }
-                            // Wait for client to close the connection
-                            let _ = socket.read(&mut [0u8; 1]).await;
-                        }
-                        Err(err) => warn!("listener accept failed: {:?}", err),
-                    }
-                }
-            });
-        }
-    });
-}
-
-fn ip_echo_server_request_length() -> usize {
-    bincode::serialized_size(&IpEchoServerMessage::default()).unwrap() as usize
-}
-
-pub async fn ip_echo_client(addr: SocketAddr) -> Result<u16, Box<dyn std::error::Error>> {
-    let mut socket = tokio::net::TcpStream::connect(addr).await?;
-
-    // Send the 4-byte header
-    socket.write_all(&[0u8; 4]).await?;
-
-    // Read the 2-byte shred version
-    let mut buf = [0u8; 2];
-    socket.read_exact(&mut buf).await?;
-
-    // Convert bytes to u16
-    let shred_version = u16::from_le_bytes(buf);
-    Ok(shred_version)
 }
