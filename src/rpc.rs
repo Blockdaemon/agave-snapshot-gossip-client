@@ -44,6 +44,12 @@ impl RpcServer {
         scraper: Arc<MetadataScraper>,
         enable_proxy: bool,
     ) -> Result<Response<Body>, hyper::Error> {
+        let peer_ip = request
+            .extensions()
+            .get::<SocketAddr>()
+            .map(|addr| addr.ip().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
         // Handle non-GET requests by letting them proceed to JSON-RPC handler
         if request.method() != &Method::GET {
             return Ok(Response::builder()
@@ -57,8 +63,8 @@ impl RpcServer {
         // Handle non-snapshot GET requests with 404
         if !SNAPSHOT_REGEX.is_match(request_path) {
             warn!(
-                "Returning 404 for non-snapshot GET request: {}",
-                request_path
+                "Returning 404 for non-snapshot GET request for {}: {}",
+                peer_ip, request_path
             );
             return Ok(Response::builder()
                 .status(StatusCode::NOT_FOUND)
@@ -73,6 +79,10 @@ impl RpcServer {
                     let client = http_proxy::create_proxy_client();
                     http_proxy::handle_proxy_request(client, request, target_uri).await
                 } else {
+                    info!(
+                        "Redirecting snapshot request for {} to {}",
+                        peer_ip, target_uri
+                    );
                     Ok(Response::builder()
                         .status(StatusCode::TEMPORARY_REDIRECT)
                         .header(header::LOCATION, target_uri.to_string())
@@ -81,7 +91,7 @@ impl RpcServer {
                 }
             }
             Err(e) => {
-                error!("Failed to build URI: {}", e);
+                error!("Failed to build URI for {}: {}", peer_ip, e);
                 Ok(Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::empty())
@@ -152,6 +162,11 @@ impl RpcServer {
                 // Only handle GET requests
                 if request.method() == &Method::GET {
                     let request_path = request.uri().path();
+                    let peer_ip = request
+                        .extensions()
+                        .get::<SocketAddr>()
+                        .map(|addr| addr.ip().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
 
                     // Handle snapshot-related GET requests
                     if SNAPSHOT_REGEX.is_match(request_path) {
@@ -167,8 +182,8 @@ impl RpcServer {
 
                     // Handle non-snapshot GET requests with 404
                     warn!(
-                        "Returning 404 for non-snapshot GET request: {}",
-                        request_path
+                        "Returning 404 for non-snapshot GET request for {}: {}",
+                        peer_ip, request_path
                     );
                     return RequestMiddlewareAction::Respond {
                         response: Box::pin(async {
