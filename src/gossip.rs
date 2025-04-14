@@ -60,7 +60,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
             let mut last_peer_count = 0;
             let mut last_shred_version = 0;
             let mut connected = false;
-            while !exit.load(std::sync::atomic::Ordering::SeqCst) {
+            while !exit.load(std::sync::atomic::Ordering::Relaxed) {
                 let peer_count = self.all_peers().len();
                 if peer_count > 2 && !connected {
                     connected = true;

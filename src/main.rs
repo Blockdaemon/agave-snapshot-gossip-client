@@ -146,7 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
     info!("Starting RPC server on {}...", rpc_listen);
-    let _rpc_server = rpc_server.start(rpc_listen);
+    rpc_server.start(rpc_listen, exit.clone()).await?;
     info!("Started RPC server");
 
     warn!("Ready to accept connections");
@@ -164,18 +164,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Stop RPC server
-    info!("Stopping RPC server...");
-    // drop runtime outside the async context
-    std::thread::spawn(move || {
-        _rpc_server.close();
-    });
+    info!("Signaling RPC server to exit...");
+    // Signal exit to gossip/monitor service and RPC server
+    exit.store(true, std::sync::atomic::Ordering::SeqCst);
 
-    // Signal and  wait for gossip services if they were started
+    // Wait for gossip services if they were started
     if let Some((monitor_handle, gossip_handle)) = gossip_handles {
-        info!("Signaling gossip service and monitor to exit...");
-        // Signal exit to gossip service and monitor
-        exit.store(true, std::sync::atomic::Ordering::SeqCst);
+        info!("Signaled gossip/monitor service to exit...");
 
         // Wait for monitor to complete
         monitor_handle.await.unwrap_or_else(|e| {
@@ -193,6 +188,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Gossip service shutdown complete");
     }
 
-    warn!("Shutting down...");
+    warn!("Shutting down");
     std::process::exit(0);
 }

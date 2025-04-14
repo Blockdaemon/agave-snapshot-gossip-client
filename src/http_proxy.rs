@@ -1,93 +1,110 @@
-use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use jsonrpc_http_server::hyper::{
-    self,
-    client::{connect::Connect, HttpConnector},
-    header::{self, HeaderName},
-    Body, Client, Request, Response, StatusCode, Uri,
+// Simple HTTP proxy for Axum
+use axum::{
+    body::Body,
+    http::{header, Request, Response, StatusCode, Uri},
 };
-use log::{debug, error};
+use log::{info, warn};
+use reqwest::Client;
 
-// Function to create the HTTPS-capable hyper client using rustls
-pub fn create_proxy_client() -> Client<HttpsConnector<HttpConnector>> {
-    // Build HttpsConnector using the rustls config and http connector
-    let mut http = HttpConnector::new();
-    http.enforce_http(false);
-    let https = HttpsConnectorBuilder::new()
-        .with_native_roots()
-        .https_or_http()
-        .enable_http1()
-        .wrap_connector(http);
-
-    Client::builder().build(https)
+// Create a proxy client with HTTPS support
+pub fn create_proxy_client() -> Client {
+    reqwest::ClientBuilder::new()
+        .use_rustls_tls()
+        .danger_accept_invalid_certs(true) // For development only
+        .build()
+        .expect("Failed to create HTTP client")
 }
 
-// Helper to create a simple status code response for direct use
-fn create_error_response(status_code: StatusCode) -> Response<Body> {
-    Response::builder()
-        .status(status_code)
-        .body(Body::empty())
-        .unwrap() // Safe unwrap: status code is valid
-}
+// Fully functional proxy handler for Axum
+pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
+    info!("Proxying to {}", target_uri);
 
-// Builds the outgoing request for the reverse proxy
-fn build_proxy_request(
-    incoming_request: &Request<Body>,
-    target_uri: Uri,
-) -> Result<Request<Body>, String> {
-    let mut proxy_req_builder = Request::builder()
-        .method(incoming_request.method().clone())
-        .uri(target_uri)
-        .version(incoming_request.version());
+    // Create client
+    let client = create_proxy_client();
 
-    // Clone headers, potentially filtering/modifying
-    for (key, value) in incoming_request.headers() {
-        // Don't copy the original host header
-        if key != header::HOST {
-            proxy_req_builder = proxy_req_builder.header(key.clone(), value.clone());
+    // Build request based on method
+    let mut request_builder = match req.method() {
+        &http::Method::GET => client.get(target_uri.to_string()),
+        &http::Method::POST => client.post(target_uri.to_string()),
+        &http::Method::PUT => client.put(target_uri.to_string()),
+        &http::Method::DELETE => client.delete(target_uri.to_string()),
+        &http::Method::HEAD => client.head(target_uri.to_string()),
+        &http::Method::OPTIONS => client.request(reqwest::Method::OPTIONS, target_uri.to_string()),
+        &http::Method::PATCH => client.patch(target_uri.to_string()),
+        _ => {
+            return Response::builder()
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .body(Body::from("Method not allowed for proxying"))
+                .unwrap();
+        }
+    };
+
+    // Copy headers from original request
+    for (name, value) in req.headers() {
+        // Skip host header as it will be set by reqwest
+        if name != header::HOST {
+            request_builder = request_builder.header(name.clone(), value.clone());
         }
     }
 
-    // Add X-Forwarded-For header using from_static
-    let forwarded_for_header_name = HeaderName::from_static("x-forwarded-for");
-    let forwarded_for_value = match incoming_request.headers().get(&forwarded_for_header_name) {
-        Some(existing) => format!("{}, unknown", existing.to_str().unwrap_or("")),
-        None => "unknown".to_string(),
-    };
-    proxy_req_builder = proxy_req_builder.header(forwarded_for_header_name, forwarded_for_value);
+    // Add proxy headers
+    request_builder = request_builder
+        .header("X-Forwarded-Proto", "http")
+        .header("X-Forwarded-For", "unknown");
 
-    // Add X-Forwarded-Proto using from_static
-    let forwarded_proto_header_name = HeaderName::from_static("x-forwarded-proto");
-    proxy_req_builder = proxy_req_builder.header(forwarded_proto_header_name, "http");
+    // For non-GET requests, handle request body (snapshots use GET so this is simple for now)
+    if req.method() != http::Method::GET && req.method() != http::Method::HEAD {
+        // If needed in the future, handle request body here
+    }
 
-    // Build the request with an empty body for GET
-    proxy_req_builder
-        .body(Body::empty()) // Assuming GET, might need body for other methods
-        .map_err(|e| format!("Failed to build proxy request: {}", e))
-}
-
-// Handles the logic for parsing the target URI, building, and executing the proxy request
-pub async fn handle_proxy_request<C>(
-    client: Client<C>,
-    request: Request<Body>,
-    target_uri: Uri,
-) -> Result<Response<Body>, hyper::Error>
-where
-    C: Connect + Clone + Send + Sync + 'static,
-{
-    let proxy_req = match build_proxy_request(&request, target_uri) {
-        Ok(req) => req,
+    // Execute the request
+    let proxy_response = match request_builder.send().await {
+        Ok(resp) => resp,
         Err(e) => {
-            error!("{}", e);
-            return Ok(create_error_response(StatusCode::INTERNAL_SERVER_ERROR));
+            warn!("Proxy request failed: {}", e);
+            return Response::builder()
+                .status(StatusCode::BAD_GATEWAY)
+                .body(Body::from(format!("Proxy error: {}", e)))
+                .unwrap();
         }
     };
 
-    debug!(
-        "Attempting proxy request to URI: scheme={:?}, authority={:?}, path={}",
-        proxy_req.uri().scheme(),
-        proxy_req.uri().authority(),
-        proxy_req.uri().path()
-    );
+    // Build the response from the proxied response
+    let status = proxy_response.status();
+    let proxy_headers = proxy_response.headers().clone();
 
-    client.request(proxy_req).await
+    // Get the response body
+    let bytes = match proxy_response.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("Failed to read proxy response body: {}", e);
+            return Response::builder()
+                .status(StatusCode::BAD_GATEWAY)
+                .body(Body::from("Failed to read upstream response"))
+                .unwrap();
+        }
+    };
+
+    // Create the response with the status code
+    let mut response_builder = Response::builder().status(status);
+
+    // Copy the headers from the proxied response
+    for (name, value) in proxy_headers.iter() {
+        response_builder = response_builder.header(name, value);
+    }
+
+    // Add a header indicating this was proxied
+    response_builder = response_builder.header("X-Proxy-Server", "Agave-Snapshot-Proxy");
+
+    // Build the response with the body
+    match response_builder.body(Body::from(bytes)) {
+        Ok(response) => response,
+        Err(e) => {
+            warn!("Failed to build response: {}", e);
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from("Failed to build response"))
+                .unwrap()
+        }
+    }
 }

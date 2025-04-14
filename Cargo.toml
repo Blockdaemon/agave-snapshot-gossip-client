@@ -22,12 +22,13 @@ solana-sdk = "~2"
 solana-streamer = "~2"
 solana-version = "~2"
 
-# for http_proxy.rs
-jsonrpc-http-server = "*"
-# we're stuck here due to jsonrpc-http-server which is abandoned
-hyper = { version = "~0.14", features = ["full"] }
-# we're stuck here because of hyper 0.14
-hyper-rustls = { version = "~0.23", features = ["native-tokio"] }
+# for rpc.rs and http_proxy.rs
+bytes = "~1"
+axum = { version = "*", features = ["json"] }
+serde = { version = "~1", features = ["derive"] }
+serde_json = "*"
+reqwest = { version = "*", features = ["json", "rustls-tls"] }
+http = "~1"
 
 # Everything else
 anyhow = "~1"
@@ -39,19 +40,12 @@ dns-lookup = "~2"
 env_logger = "*"
 get_if_addrs = "*"
 igd = "*"
-jsonrpc-core = "*"
 lazy_static = "~1"
 log = "*"
 regex = "~1"
-reqwest = { version = "*", features = ["json", "rustls-tls"] }
-rustls = "*"
-serde = { version = "~1", features = ["derive"] }
-serde_json = "*"
-signal-hook = "*"
 stun-client = "*"
-tokio = { version = "~1", features = ["rt"] }
+tokio = { version = "~1", features = ["rt", "rt-multi-thread", "sync", "macros", "io-util", "fs", "time", "net"] }
 toml = "*"
-url = "~2"
 
 [build-dependencies]
 anyhow = "*"
