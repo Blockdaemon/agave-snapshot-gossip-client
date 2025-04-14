@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use dns_lookup::lookup_host;
 use hyper::Uri;
-use log::{error, warn};
+use log::{error, info, warn};
 use serde::Deserialize;
 
 use crate::constants::{
@@ -28,6 +28,7 @@ pub struct Config {
 
     // What public IP to advertise, or how to discover it
     pub public_ip: Option<String>,
+    pub enable_stun: Option<bool>,
     pub stun_server: Option<String>,
 
     // What gossip and RPC ports to listen on and advertise
@@ -65,6 +66,7 @@ pub enum ConfigError {
     InvalidAddress(String),
     DnsLookupError(String),
     ParseError(String),
+    IpEchoError(String),
 }
 
 impl std::error::Error for ConfigError {}
@@ -76,6 +78,7 @@ impl std::fmt::Display for ConfigError {
             ConfigError::InvalidAddress(e) => write!(f, "Invalid address: {}", e),
             ConfigError::DnsLookupError(e) => write!(f, "DNS lookup error: {}", e),
             ConfigError::ParseError(e) => write!(f, "Parse error: {}", e),
+            ConfigError::IpEchoError(e) => write!(f, "IP echo error: {}", e),
         }
     }
 }
@@ -123,19 +126,38 @@ impl Config {
         stun_client.get_public_ip(false).await
     }
 
-    pub async fn resolve(&self) -> Result<ResolvedConfig, ConfigError> {
-        let public_ip = match &self.public_ip {
-            Some(addr) => addr
-                .parse()
-                .map_err(|e| ConfigError::ParseError(format!("Invalid public address: {}", e)))?,
-            None => {
-                warn!("No public_addr in config, attempting to discover...");
-                self.get_external_ip_with_stun()
-                    .await
-                    .map_err(ConfigError::StunError)?
-            }
-        };
+    pub async fn ip_echo(&self, entrypoints: &[SocketAddr]) -> Result<(IpAddr, u16), ConfigError> {
+        let mut discovered_ip = None;
+        let mut discovered_shred_version = None;
 
+        // Try each entrypoint with IP echo client
+        for entrypoint in entrypoints {
+            let request = crate::ip_echo::IpEchoServerMessage::new(&[], &[]);
+            info!("IP echo request to {}: {:?}", entrypoint, request);
+            if let Ok((ip, shred_version)) =
+                crate::ip_echo::ip_echo_client(*entrypoint, request).await
+            {
+                discovered_ip = Some(ip);
+                discovered_shred_version = Some(shred_version);
+                info!(
+                    "IP echo response from {}: {:?} {:?}",
+                    entrypoint, ip, shred_version
+                );
+                break;
+            }
+        }
+        Ok((
+            discovered_ip.ok_or_else(|| {
+                ConfigError::IpEchoError("Failed to discover public IP through IP echo".into())
+            })?,
+            discovered_shred_version.ok_or_else(|| {
+                ConfigError::IpEchoError("Failed to discover shred version through IP echo".into())
+            })?,
+        ))
+    }
+
+    pub async fn resolve(&self) -> Result<ResolvedConfig, ConfigError> {
+        // Resolve entrypoints first since we need them for both IP echo and final config
         let entrypoints = self
             .entrypoints
             .clone()
@@ -143,6 +165,63 @@ impl Config {
             .into_iter()
             .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
             .collect::<Result<Vec<_>, _>>()?;
+
+        let (public_ip, discovered_shred_version) = {
+            // First try IP echo to get public ip and shred version at the same time
+            let ip_echo_result = self.ip_echo(&entrypoints).await;
+
+            // If public_ip is configured, use that regardless of IP echo result
+            // If we get ip echo result and user configured a public ip, compare them
+            if let Some(addr) = &self.public_ip {
+                let ip = addr.parse().map_err(|e| {
+                    ConfigError::ParseError(format!("Invalid public address: {}", e))
+                })?;
+                if let Ok((echo_ip, _)) = &ip_echo_result {
+                    if ip != *echo_ip {
+                        error!(
+                            "Configured public IP {} differs from IP echo result {}",
+                            ip, echo_ip
+                        );
+                    }
+                }
+                (ip, ip_echo_result.ok().map(|(_, version)| version))
+            } else {
+                match ip_echo_result {
+                    Ok((ip, shred_version)) => (ip, Some(shred_version)),
+                    Err(e) => {
+                        warn!("IP echo failed: {}", e);
+                        if self.enable_stun.unwrap_or(false) {
+                            (
+                                self.get_external_ip_with_stun()
+                                    .await
+                                    .map_err(ConfigError::StunError)?,
+                                None,
+                            )
+                        } else {
+                            return Err(ConfigError::IpEchoError(
+                                "Failed to discover public IP through IP echo and STUN is disabled"
+                                    .into(),
+                            ));
+                        }
+                    }
+                }
+            }
+        };
+
+        // Validate and resolve shred version:
+        // - Error if both versions exist and differ
+        // - Use whichever version is available
+        // - Return None if neither version is available
+        let shred_version = match (discovered_shred_version, self.shred_version) {
+            (Some(discovered), Some(configured)) if discovered != configured => {
+                return Err(ConfigError::ParseError(format!(
+                    "Shred version mismatch: {} from ip echo, {} from config",
+                    discovered, configured
+                )));
+            }
+            (Some(discovered), _) => Some(discovered),
+            (_, configured) => configured,
+        };
 
         let storage_path = match self.storage_path.as_deref() {
             None => None,
@@ -158,7 +237,7 @@ impl Config {
                 .unwrap_or_else(|| DEFAULT_KEYPAIR_PATH.to_string()),
             entrypoints,
             expected_genesis_hash: self.expected_genesis_hash.clone(),
-            shred_version: self.shred_version.clone(),
+            shred_version,
             listen_ip: self
                 .listen_ip
                 .as_ref()
@@ -182,6 +261,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
                 error!("Failed to parse {}: {}", path, e);
                 std::process::exit(1);
             });
+            config.enable_stun.get_or_insert(false);
             config.enable_upnp.get_or_insert(false);
             config.enable_proxy.get_or_insert(false);
             config
@@ -191,6 +271,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
             Config {
                 keypair_path: None,
                 entrypoints: None,
+                enable_stun: None,
                 stun_server: None,
                 public_ip: None,
                 enable_upnp: None,

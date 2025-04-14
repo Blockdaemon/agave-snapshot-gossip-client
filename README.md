@@ -86,6 +86,7 @@ Use `--config <path>` to specify a custom config file location. Default is `conf
 | `keypair_path`           | `keypair.json`            | Path to keypair file        |
 | `listen_ip`              | `0.0.0.0`                 | Local bind/listen IP        |
 | `public_ip`              | Auto (STUN)               | Public IP address           |
+| `enable_stun`            | `false`                   | Use STUN to discover public IP instead of `ip_echo` |
 | `stun_server`            | `stun.l.google.com:3478`  | STUN server address         |
 | `gossip_port`            | `8001`                    | Gossip listen port          |
 | `rpc_port`               | `8899`                    | RPC listen port             |
@@ -110,7 +111,22 @@ See [Solana Cluster Information](https://docs.anza.xyz/clusters/available) for t
   - TCP/UDP port 8001 (gossip) - if you need to be a publicly reachable gossip entrypoint (optional)
   - TCP port 8899 (RPC) - A publicly reachable RPC endpoint is required for validators to accept snapshots from you
 
-**Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production. Use explicit `public_ip` configuration instead, and configure port firewall/forwarding rules manually.
+**Note**: STUN-based IP detection and UPnP port forwarding are not recommended for production.
+Configure port firewall/forwarding rules manually. IP detection will be done via `ip_echo` to each entrypoint by default.
+
+IP resolution preference order:
+1. `public_ip` from user config (if provided)
+2. IP echo result (if `public_ip` not provided)
+3. STUN result (only if IP echo fails and STUN is enabled)
+
+Shred version resolution:
+1. If both configured and discovered versions exist and differ, it's an error
+2. Use whichever version is available (either configured or discovered)
+3. Return None if neither version is available
+
+Note that even when `public_ip` is configured, IP echo is still attempted to get the shred version.
+
+Explicit `public_ip` and `shred_version` configuration is always checked against `ip_echo` results.
 
 ## Known Issues
    - Agave validators refuse to download snapshots from us, even though we are publicly reachable [issue #20](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/20)

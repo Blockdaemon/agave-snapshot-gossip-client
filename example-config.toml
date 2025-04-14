@@ -30,8 +30,12 @@
 # Gossip is hardcoded to 0.0.0.0 and can't be changed.
 #listen_ip = "127.0.0.1"
 
-# Optional: Public IP address (default: use STUN)
+# Optional: Public IP address (default: use STUN if enabled, otherwise ip_echo to each entrypoint)
 #public_ip = "1.2.3.4"
+
+# Optional: Enable STUN (default: false)
+# By default, use ip_echo and not STUN
+#enable_stun = true
 
 # Optional: STUN server (default: stun.l.google.com:3478)
 #stun_server = "1.2.3.4:3478"

@@ -21,7 +21,6 @@ pub struct IpEchoServerMessage {
 }
 
 // IpEchoServerMessage is used by the client to send its port array to the server
-#[allow(dead_code)]
 impl IpEchoServerMessage {
     pub fn new(tcp_ports: &[u16], udp_ports: &[u16]) -> Self {
         let mut request = Self::default();
@@ -44,7 +43,6 @@ pub struct IpEchoServerResponse {
     shred_version: Option<u16>,
 }
 
-#[allow(dead_code)]
 impl IpEchoServerResponse {
     pub fn new(address: IpAddr, shred_version: Option<u16>) -> Self {
         Self {
@@ -123,6 +121,9 @@ pub fn create_ip_echo_server(ip_echo: Option<TcpListener>, shred_version: u16) {
             tcp_listener.local_addr().unwrap()
         );
 
+        // Set non-blocking mode once before cloning
+        tcp_listener.set_nonblocking(true).unwrap();
+
         // Spawn multiple tasks in the existing runtime
         for _ in 0..DEFAULT_IP_ECHO_SERVER_THREADS {
             let tcp_listener = TokioTcpListener::from_std(tcp_listener.try_clone().unwrap())
@@ -145,7 +146,6 @@ pub fn create_ip_echo_server(ip_echo: Option<TcpListener>, shred_version: u16) {
     });
 }
 
-#[allow(dead_code)]
 pub async fn ip_echo_client(
     addr: SocketAddr,
     request: IpEchoServerMessage,
@@ -326,7 +326,9 @@ mod tests {
         create_ip_echo_server(Some(tcp_listener.into_std().unwrap()), shred_version);
 
         // Use our client to connect and get the response
-        let (address, version) = ip_echo_client(server_addr, create_test_request()).await.unwrap();
+        let (address, version) = ip_echo_client(server_addr, create_test_request())
+            .await
+            .unwrap();
 
         // Verify the response
         assert_eq!(address, IpAddr::from([127, 0, 0, 1]));
