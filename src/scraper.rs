@@ -1,14 +1,13 @@
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use hyper::Uri;
+use http::Uri;
 use log::{debug, error, info};
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
 use std::str::FromStr;
 use tokio::sync::RwLock;
-use url::Url;
 
 use crate::constants::{
     DEFAULT_SCRAPER_CACHE_TTL_SECS, DEFAULT_SCRAPER_USER_AGENT, DEFAULT_SNAPSHOT_INFO_PATH,
@@ -120,11 +119,26 @@ impl MetadataScraper {
     }
 
     fn join_urls(base: &Uri, path: &str) -> Result<String, ScraperError> {
-        Url::parse(&base.to_string())
-            .map_err(|e| ScraperError::NetworkError(format!("Invalid base URI: {}", e)))?
-            .join(path)
-            .map_err(|e| ScraperError::NetworkError(format!("Failed to join URIs: {}", e)))
-            .map(|url| url.to_string())
+        // Get base components
+        let scheme = base.scheme_str().unwrap_or("http");
+        let authority = base
+            .authority()
+            .map(|a| a.to_string())
+            .ok_or_else(|| ScraperError::NetworkError("Missing authority in URI".to_string()))?;
+
+        // Clean the path by removing leading slash if present
+        let clean_path = path.strip_prefix('/').unwrap_or(path);
+
+        // Join paths properly, handling trailing slashes
+        let base_path = base.path();
+        let joined_path = if base_path.ends_with('/') || base_path == "/" {
+            format!("{}{}", base_path, clean_path)
+        } else {
+            format!("{}/{}", base_path, clean_path)
+        };
+
+        // Construct the final URL
+        Ok(format!("{}://{}{}", scheme, authority, joined_path))
     }
 
     async fn fetch_snapshot_info(&self) -> Result<SnapshotInfo, ScraperError> {
@@ -234,5 +248,75 @@ impl MetadataScraper {
             request_uri, request_path, final_uri
         );
         Ok(final_uri)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::Uri;
+
+    #[test]
+    fn test_join_urls() {
+        // Test cases for different base URLs and paths
+        let test_cases = vec![
+            // Base with trailing slash
+            (
+                "http://example.com:8899/storage/",
+                "genesis.tar.gz",
+                "http://example.com:8899/storage/genesis.tar.gz",
+            ),
+            // Base without trailing slash
+            (
+                "http://example.com:8899/storage",
+                "genesis.tar.gz",
+                "http://example.com:8899/storage/genesis.tar.gz",
+            ),
+            // Root path
+            (
+                "http://example.com:8899/",
+                "genesis.tar.gz",
+                "http://example.com:8899/genesis.tar.gz",
+            ),
+            // Empty path (just domain)
+            (
+                "http://example.com:8899",
+                "genesis.tar.gz",
+                "http://example.com:8899/genesis.tar.gz",
+            ),
+            // Path with leading slash
+            (
+                "http://example.com:8899/storage",
+                "/genesis.tar.gz",
+                "http://example.com:8899/storage/genesis.tar.gz",
+            ),
+            // Path with leading slash and base with trailing slash
+            (
+                "http://example.com:8899/storage/",
+                "/genesis.tar.gz",
+                "http://example.com:8899/storage/genesis.tar.gz",
+            ),
+            // HTTPS protocol
+            (
+                "https://example.com/storage",
+                "genesis.tar.gz",
+                "https://example.com/storage/genesis.tar.gz",
+            ),
+            // Nested paths
+            (
+                "http://example.com:8899/data/storage",
+                "snapshots/genesis.tar.gz",
+                "http://example.com:8899/data/storage/snapshots/genesis.tar.gz",
+            ),
+        ];
+
+        for (base_url, path, expected) in test_cases {
+            let base_uri = base_url.parse::<Uri>().unwrap();
+            let result = MetadataScraper::join_urls(&base_uri, path).unwrap();
+            assert_eq!(
+                result, expected,
+                "Failed for base '{base_url}' and path '{path}'"
+            );
+        }
     }
 }

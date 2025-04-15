@@ -3,7 +3,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 
 use dns_lookup::lookup_host;
-use hyper::Uri;
+use http::Uri;
 use log::{error, info, warn};
 use serde::Deserialize;
 
