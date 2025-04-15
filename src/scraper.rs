@@ -22,6 +22,12 @@ pub enum ScraperError {
     NetworkMismatch(String),
 }
 
+#[derive(Debug, PartialEq)]
+pub struct SnapshotHashes {
+    pub full: (u64, String),
+    pub incremental: Option<(u64, String)>,
+}
+
 impl std::error::Error for ScraperError {}
 
 impl std::fmt::Display for ScraperError {
@@ -31,6 +37,20 @@ impl std::fmt::Display for ScraperError {
             ScraperError::ParseError(e) => write!(f, "Parse error: {}", e),
             ScraperError::NetworkMismatch(e) => write!(f, "Network mismatch: {}", e),
         }
+    }
+}
+
+impl SnapshotHashes {
+    pub fn convert_snapshot_hashes(
+        &self,
+    ) -> Result<(u64, String, Vec<(u64, String)>), ScraperError> {
+        Ok((
+            self.full.0,
+            self.full.1.clone(),
+            self.incremental
+                .as_ref()
+                .map_or_else(Vec::new, |(slot, hash)| vec![(slot.clone(), hash.clone())]),
+        ))
     }
 }
 
@@ -50,6 +70,56 @@ pub struct SnapshotInfo {
     pub incremental_snapshot_hash: String,
     pub incremental_snapshot_slot: u64,
     pub incremental_snapshot_url: String,
+}
+
+impl SnapshotInfo {
+    fn extract_hash_from_url(url: &str) -> Result<String, ScraperError> {
+        // Check URL format
+        let url = url
+            .strip_prefix("https://")
+            .ok_or_else(|| ScraperError::ParseError(format!("Invalid URL format: {}", url)))?;
+
+        // Find the last hyphen to get the hash
+        let last_hyphen = url
+            .rfind('-')
+            .ok_or_else(|| ScraperError::ParseError(format!("No hyphen found in URL: {}", url)))?;
+
+        // Check if there's another hyphen before the last one (we need at least two hyphens)
+        if url[..last_hyphen].rfind('-').is_none() {
+            return Err(ScraperError::ParseError(format!(
+                "URL must contain at least two hyphens: {}",
+                url
+            )));
+        }
+
+        // Extract the hash (everything between the last hyphen and the first dot after it)
+        let first_dot = url[last_hyphen + 1..].find('.').ok_or_else(|| {
+            ScraperError::ParseError(format!("No file extension found in URL: {}", url))
+        })?;
+
+        let hash_str = &url[last_hyphen + 1..last_hyphen + 1 + first_dot];
+        Ok(hash_str.to_string())
+    }
+
+    pub fn get_snapshot_hashes(&self) -> Result<SnapshotHashes, ScraperError> {
+        // First check URL format for full snapshot
+        let full_hash = Self::extract_hash_from_url(&self.full_snapshot_url)?;
+
+        // Then check URL format for incremental snapshot
+        let incremental = if !self.incremental_snapshot_url.is_empty() {
+            match Self::extract_hash_from_url(&self.incremental_snapshot_url) {
+                Ok(hash) => Some((self.incremental_snapshot_slot, hash)),
+                Err(_) => None, // If we can't extract the hash, just treat it as no incremental
+            }
+        } else {
+            None
+        };
+
+        Ok(SnapshotHashes {
+            full: (self.full_snapshot_slot, full_hash),
+            incremental,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -121,10 +191,9 @@ impl MetadataScraper {
     fn join_urls(base: &Uri, path: &str) -> Result<String, ScraperError> {
         // Get base components
         let scheme = base.scheme_str().unwrap_or("http");
-        let authority = base
-            .authority()
-            .map(|a| a.to_string())
-            .ok_or_else(|| ScraperError::NetworkError("Missing authority in URI".to_string()))?;
+        let authority = base.authority().map(|a| a.to_string()).ok_or_else(|| {
+            ScraperError::NetworkError(format!("Missing authority in URI: {}", base))
+        })?;
 
         // Clean the path by removing leading slash if present
         let clean_path = path.strip_prefix('/').unwrap_or(path);
@@ -151,7 +220,7 @@ impl MetadataScraper {
             self.storage_path.as_ref().unwrap(),
             DEFAULT_SNAPSHOT_INFO_PATH,
         )?;
-        info!("Fetching snapshot info from {}", url);
+        debug!("Fetching snapshot info from {}", url);
         let response = self.http_client.get(&url).send().await.map_err(|e| {
             ScraperError::NetworkError(format!(
                 "Failed to fetch snapshot info from {}: {} (source: {:?})",
@@ -191,6 +260,15 @@ impl MetadataScraper {
         Ok(info)
     }
 
+    fn update_cache_state(
+        &self,
+        cache: &mut (SnapshotInfo, Instant),
+        info: SnapshotInfo,
+    ) -> SnapshotInfo {
+        *cache = (info.clone(), Instant::now());
+        info
+    }
+
     pub async fn get_cached_snapshot_info(&self) -> SnapshotInfo {
         let cache = self.cache.read().await;
         if cache.1.elapsed() < CACHE_DURATION {
@@ -198,12 +276,11 @@ impl MetadataScraper {
         }
         drop(cache);
 
-        info!("Cache expired, fetching new snapshot info");
+        debug!("Cache expired, fetching new snapshot info");
         match self.fetch_snapshot_info().await {
             Ok(info) => {
                 let mut cache = self.cache.write().await;
-                *cache = (info.clone(), Instant::now());
-                info
+                self.update_cache_state(&mut cache, info)
             }
             Err(e) => {
                 let cache = self.cache.read().await;
@@ -213,6 +290,11 @@ impl MetadataScraper {
                 info
             }
         }
+    }
+
+    pub async fn get_snapshot_hashes(&self) -> Result<SnapshotHashes, ScraperError> {
+        let info = self.get_cached_snapshot_info().await;
+        info.get_snapshot_hashes()
     }
 
     pub async fn build_uri(&self, request_uri: &Uri) -> Result<Uri, ScraperError> {
@@ -318,5 +400,85 @@ mod tests {
                 "Failed for base '{base_url}' and path '{path}'"
             );
         }
+    }
+
+    #[test]
+    fn test_snapshot_hashes() {
+        // Test with both full and incremental snapshots
+        let hashes = SnapshotHashes {
+            full: (100, "full_hash".to_string()),
+            incremental: Some((200, "incremental_hash".to_string())),
+        };
+        let result = hashes.convert_snapshot_hashes().unwrap();
+        assert_eq!(result.0, 100);
+        assert_eq!(result.1, "full_hash");
+        assert_eq!(result.2, vec![(200, "incremental_hash".to_string())]);
+
+        // Test with only full snapshot
+        let hashes = SnapshotHashes {
+            full: (100, "full_hash".to_string()),
+            incremental: None,
+        };
+        let result = hashes.convert_snapshot_hashes().unwrap();
+        assert_eq!(result.0, 100);
+        assert_eq!(result.1, "full_hash");
+        assert!(result.2.is_empty());
+    }
+
+    #[test]
+    fn test_get_snapshot_hashes_no_incremental() {
+        let info = SnapshotInfo {
+            solana_version: "1.0.0".to_string(),
+            solana_feature_set: 0,
+            genesis_hash: "test_genesis".to_string(),
+            slot: 100,
+            timestamp: 0,
+            timestamp_human: "2024-01-01T00:00:00Z".to_string(),
+            status: "completed".to_string(),
+            uploaded_by: "test".to_string(),
+            full_snapshot_hash: "full_hash".to_string(),
+            full_snapshot_slot: 100,
+            full_snapshot_url: "https://example.com/snapshot-full-abc123.tar.zst".to_string(),
+            incremental_snapshot_hash: "".to_string(),
+            incremental_snapshot_slot: 0,
+            incremental_snapshot_url: "https://example.com/incremental-snapshot-invalid.tar.zst"
+                .to_string(),
+        };
+
+        let result = info.get_snapshot_hashes().unwrap();
+        assert_eq!(result.full, (100, "abc123".to_string()));
+        assert_eq!(result.incremental, Some((0, "invalid".to_string())));
+    }
+
+    #[test]
+    fn test_validation_state_preserved() {
+        let info = SnapshotInfo {
+            solana_version: "1.0.0".to_string(),
+            solana_feature_set: 0,
+            genesis_hash: "test_genesis".to_string(),
+            slot: 100,
+            timestamp: 0,
+            timestamp_human: "2024-01-01T00:00:00Z".to_string(),
+            status: "completed".to_string(),
+            uploaded_by: "test".to_string(),
+            full_snapshot_hash: "full_hash".to_string(),
+            full_snapshot_slot: 100,
+            full_snapshot_url: "https://example.com/snapshot-full-abc123.tar.zst".to_string(),
+            incremental_snapshot_hash: "".to_string(),
+            incremental_snapshot_slot: 0,
+            incremental_snapshot_url: "https://example.com/incremental-snapshot-invalid.tar.zst"
+                .to_string(),
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&info).unwrap();
+
+        // Deserialize back
+        let deserialized: SnapshotInfo = serde_json::from_str(&json).unwrap();
+
+        // Create state with validation
+        let state = deserialized.get_snapshot_hashes().unwrap();
+        assert_eq!(state.full, (100, "abc123".to_string()));
+        assert_eq!(state.incremental, Some((0, "invalid".to_string())));
     }
 }

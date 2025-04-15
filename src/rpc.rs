@@ -210,12 +210,12 @@ impl RpcServer {
                     .load(std::sync::atomic::Ordering::Relaxed))
             }
             "getGenesisHash" => {
-                let info = state.scraper.get_cached_snapshot_info().await;
-                json!(info.genesis_hash)
+                let state = state.scraper.get_cached_snapshot_info().await;
+                json!(state.genesis_hash)
             }
             "getSlot" => {
-                let info = state.scraper.get_cached_snapshot_info().await;
-                json!(info.slot)
+                let state = state.scraper.get_cached_snapshot_info().await;
+                json!(state.slot)
             }
             _ => {
                 return jsonrpc_error(-32601, "Method not found", id, StatusCode::BAD_REQUEST);
