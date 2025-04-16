@@ -4,14 +4,26 @@
 	dh $@
 
 override_dh_auto_install:
+	# Create directories
 	mkdir -p debian/agave-snapshot-gossip-client/usr/sbin
-	mkdir -p debian/agave-snapshot-gossip-client/etc/snapshot-gossip-client
 	mkdir -p debian/agave-snapshot-gossip-client/lib/systemd/system
 	mkdir -p debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client
-	cp target/release/snapshot-gossip-client debian/agave-snapshot-gossip-client/usr/sbin/
-	cp debian/default-config.toml debian/agave-snapshot-gossip-client/etc/snapshot-gossip-client/
-	cp debian/gossip-client.service debian/agave-snapshot-gossip-client/lib/systemd/system/
-	cp debian/changelog debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/changelog
-	cp README.md debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/README.md
-	cp LICENSE debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/LICENSE
-	cp example-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/example-config.toml
+
+	# Install binary
+	install -m 755 target/release/snapshot-gossip-client debian/agave-snapshot-gossip-client/usr/sbin/
+
+	# Install systemd service
+	install -m 644 debian/gossip-client.service debian/agave-snapshot-gossip-client/lib/systemd/system/
+
+	# Install changelog and default debian config
+	install -m 644 debian/changelog debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
+	install -m 644 debian/default-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/default-config.toml
+
+	# Install documentation
+	install -m 644 example-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/example-config.toml
+	install -m 644 README.md debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
+	install -m 644 INSTALL.md debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
+	install -m 644 LICENSE debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
+
+override_dh_install:
+	dh_install --exclude=/etc/gossip-client/config.toml

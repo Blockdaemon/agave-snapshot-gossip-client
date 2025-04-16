@@ -6,9 +6,21 @@ on:
       - 'v*'
     branches:
       - main
+    paths-ignore:
+      - '.editorconfig'
+      - '.gitignore'
+      - '.github/workflows/docker.yml'
+      - 'scripts/prepare-release.sh'
+      - 'Dockerfile'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '.editorconfig'
+      - '.gitignore'
+      - '.github/workflows/docker.yml'
+      - 'scripts/prepare-release.sh'
+      - 'Dockerfile'
   workflow_dispatch:
 
 env:

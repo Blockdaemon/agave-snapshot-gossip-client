@@ -1,23 +1,36 @@
 #!/bin/sh
+# postinst script for agave-snapshot-gossip-client
 
 set -e
 
 case "$1" in
     configure)
-        # Create the gossip-client user and group if they don't exist
-        if ! getent group gossip-client >/dev/null; then
-            addgroup --system gossip-client
+        # Install default config if it doesn't exist
+        if [ ! -f /etc/gossip-client/config.toml ]; then
+            cp /usr/share/doc/agave-snapshot-gossip-client/default-config.toml /etc/gossip-client/config.toml
         fi
 
-        if ! getent passwd gossip-client >/dev/null; then
-            adduser --system --ingroup gossip-client --no-create-home \
-                --disabled-password --shell /bin/false gossip-client
-        fi
+        # Set ownership and permissions
+        chown -R gossip-client:gossip-client /etc/gossip-client
+        chmod 755 /etc/gossip-client
+        chmod 644 /etc/gossip-client/config.toml
 
-        # Set ownership of config directory
-        chown -R gossip-client:gossip-client /etc/snapshot-gossip-client
-        chmod 750 /etc/snapshot-gossip-client
-    ;;
+        # Enable and start the service
+        systemctl enable gossip-client.service
+        systemctl start gossip-client.service
+        ;;
+
+    remove|deconfigure)
+        # Clean up when package is removed
+        systemctl stop gossip-client.service || true
+        systemctl disable gossip-client.service || true
+        ;;
+
+    abort-install|abort-upgrade|abort-remove|abort-deconfigure)
+        # Clean up if installation fails
+        systemctl stop gossip-client.service || true
+        systemctl disable gossip-client.service || true
+        ;;
 esac
 
 # dh_installdeb will replace this with shell code automatically

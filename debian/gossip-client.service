@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=gossip-client
 Group=gossip-client
-ExecStart=/usr/sbin/snapshot-gossip-client
+ExecStart=/usr/sbin/snapshot-gossip-client -c /etc/gossip-client/config.toml
 Restart=always
 RestartSec=3
 Environment=RUST_LOG=info

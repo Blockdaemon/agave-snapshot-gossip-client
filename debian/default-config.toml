@@ -1,13 +1,12 @@
-# Solana Snapshot Delivery Network (SSDN) configuration
+# Solana Snapshot Delivery Network (SSDN) Gossip Client Configuration
 #
 # See /usr/share/doc/agave-snapshot-gossip-client/example-config.toml
 #
+# If this file is not present, we will generate a new one every time we are run.
+keypair_path = "/etc/gossip-client/keypair.json"
 
-# If not present, we will generate a dynamic one every time we are run
-keypair_path = "/etc/snapshot-gossip-client/keypair.json"
-
-# Enable gossip when ready. The defaults ships this way to prevent joining the gossip network until ready
+# Disable gossip until ready. The defaults ships this way to prevent joining the gossip network when newly installed.
 disable_gossip = true
 
-# Adjust to taste
-storage_path = "http://my.storage.server.com"
+# You must configure this or nothing will work.
+storage_path = "http://localhost"
