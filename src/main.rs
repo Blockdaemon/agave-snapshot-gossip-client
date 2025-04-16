@@ -138,12 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Create rpc server
-    let rpc_server = RpcServer::new(
-        scraper,
-        num_peers,
-        shred_version,
-        resolved.enable_proxy,
-    );
+    let rpc_server = RpcServer::new(scraper, num_peers, shred_version, resolved.enable_proxy);
 
     let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
     info!("Starting RPC server on {}...", rpc_listen);
