@@ -61,6 +61,7 @@ targets = [
 
 [dev-dependencies]
 snapshot_gossip_client = { path = ".", package = "agave-snapshot-gossip-client" }
+axum-test = "*"
 bs58 = "*"
 hyper = "~1"
 wiremock = "*"

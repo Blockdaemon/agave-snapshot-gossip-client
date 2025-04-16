@@ -1,6 +1,7 @@
 pub mod config;
 pub mod constants;
 pub mod gossip;
+pub mod healthcheck;
 pub mod http_proxy;
 pub mod ip_echo;
 pub mod rpc;

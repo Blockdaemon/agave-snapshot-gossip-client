@@ -27,6 +27,7 @@ This project, along with [agave-snapshot-uploader](https://github.com/Blockdaemo
 - Minimum required JSONRPC endpoint compatibility for snapshot distribution (`getSlot`, `getVersion`, `getGenesisHash`)
 - Additional non-standard JSONRPC methods (`getNumPeers`, `getShredVersion`)
 - Native Agave support for `ip_echo` public IP and shred version discovery (client and server)
+- Health endpoint on http://localhost:8899/health
 - STUN support for public IP detection
 - UPnP support for NAT traversal
 
@@ -138,6 +139,45 @@ Explicit `public_ip` and `shred_version` configuration is always checked against
    - Large crate dependency footprint, huge memory and CPU usage for large gossip networks.
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
+
+## Docker
+
+The application is available as a Docker image from GitHub Container Registry.
+
+### Pulling the Image
+
+For the latest stable release:
+```bash
+docker pull ghcr.io/blockdaemon/agave-snapshot-gossip-client:latest
+```
+
+For a specific version:
+```bash
+docker pull ghcr.io/blockdaemon/agave-snapshot-gossip-client:v1.0.0
+```
+
+For testing a pull request:
+```bash
+docker pull ghcr.io/blockdaemon/agave-snapshot-gossip-client:pr-123
+```
+
+### Running the Container
+
+1. Create a config file (see `example-config.toml`)
+2. Run the container with your config:
+```bash
+docker run -v /path/to/config.toml:/etc/snapshot-gossip-client/config.toml ghcr.io/blockdaemon/agave-snapshot-gossip-client:latest
+```
+
+The container exposes the following ports:
+- 8001/udp - Gossip protocol
+- 8001/tcp - Gossip protocol
+- 8899/tcp - RPC server
+
+Make sure to map these ports when running the container if you need to access them from outside:
+```bash
+docker run -p 8001:8001/udp -p 8001:8001/tcp -p 8899:8899/tcp -v /path/to/config.toml:/etc/snapshot-gossip-client/config.toml ghcr.io/blockdaemon/agave-snapshot-gossip-client:latest
+```
 
 ## License
 

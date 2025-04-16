@@ -1,6 +1,7 @@
 mod config;
 mod constants;
 mod gossip;
+mod healthcheck;
 mod http_proxy;
 mod ip_echo;
 mod rpc;
