@@ -3,3 +3,9 @@
 .idea/
 *.json
 .*.swp
+/debian/.debhelper/
+/debian/agave-snapshot-gossip-client.postrm.debhelper
+/debian/agave-snapshot-gossip-client.substvars
+/debian/agave-snapshot-gossip-client/
+/debian/debhelper-build-stamp
+/debian/files

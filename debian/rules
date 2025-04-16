@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	mkdir -p debian/agave-snapshot-gossip-client/usr/sbin
+	mkdir -p debian/agave-snapshot-gossip-client/etc/snapshot-gossip-client
+	mkdir -p debian/agave-snapshot-gossip-client/lib/systemd/system
+	mkdir -p debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client
+	cp target/release/snapshot-gossip-client debian/agave-snapshot-gossip-client/usr/sbin/
+	cp debian/default-config.toml debian/agave-snapshot-gossip-client/etc/snapshot-gossip-client/
+	cp debian/gossip-client.service debian/agave-snapshot-gossip-client/lib/systemd/system/
+	cp debian/changelog debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/changelog
+	cp README.md debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/README.md
+	cp LICENSE debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/LICENSE
+	cp example-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/example-config.toml

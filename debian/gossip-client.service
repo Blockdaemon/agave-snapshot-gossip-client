@@ -1,0 +1,15 @@
+[Unit]
+Description=Solana Snapshot Delivery Network (SSDN) lightweight gossip client and proxy
+After=network.target
+
+[Service]
+Type=simple
+User=gossip-client
+Group=gossip-client
+ExecStart=/usr/sbin/snapshot-gossip-client
+Restart=always
+RestartSec=3
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

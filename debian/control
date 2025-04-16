@@ -1,0 +1,15 @@
+Source: agave-snapshot-gossip-client
+Section: utils
+Priority: optional
+Maintainer: Blockdaemon <support@blockdaemon.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.1
+Homepage: https://github.com/Blockdaemon/agave-snapshot-gossip-client
+
+Package: agave-snapshot-gossip-client
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Solana Snapshot Delivery Network (SSDN) lightweight gossip client and proxy
+ This package provides a lightweight gossip client and proxy for the Solana
+ Snapshot Delivery Network (SSDN). It helps nodes efficiently receive and
+ distribute snapshot data across the Solana network.
