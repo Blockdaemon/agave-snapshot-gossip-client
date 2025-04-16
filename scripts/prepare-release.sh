@@ -16,6 +16,9 @@ sed -i '' "s/^version = .*/version = \"${VERSION}\"/" Cargo.toml
 # Build and verify version
 echo "Building and verifying version..."
 cargo fmt
+# do this a few times to ensure all dependencies are up to date
+cargo update
+cargo update
 cargo build --release
 ./target/release/snapshot-gossip-client --version
 
