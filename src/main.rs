@@ -17,7 +17,6 @@ use clap::Parser;
 use env_logger;
 use igd::PortMappingProtocol;
 use log::{error, info, warn};
-use solana_version::Version;
 
 // Our local crates
 use gossip::start_gossip_client;
@@ -141,7 +140,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create rpc server
     let rpc_server = RpcServer::new(
         scraper,
-        Version::default().to_string(),
         num_peers,
         shred_version,
         resolved.enable_proxy,

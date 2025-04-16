@@ -11,6 +11,7 @@ use axum::{
     Router,
 };
 use log::{error, info, warn};
+use serde::Serialize;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 
@@ -54,7 +55,6 @@ fn jsonrpc_error(code: i32, message: &str, id: Option<Value>, status_code: Statu
 #[derive(Clone)]
 pub struct AppState {
     scraper: Arc<MetadataScraper>,
-    version: String,
     num_peers: Arc<AtomicI64>,
     shred_version: Arc<AtomicU16>,
     enable_proxy: bool,
@@ -62,7 +62,6 @@ pub struct AppState {
 
 pub struct RpcServer {
     scraper: Arc<MetadataScraper>,
-    version: String,
     num_peers: Arc<AtomicI64>,
     shred_version: Arc<AtomicU16>,
     enable_proxy: bool,
@@ -71,14 +70,12 @@ pub struct RpcServer {
 impl RpcServer {
     pub fn new(
         scraper: Arc<MetadataScraper>,
-        version: String,
         num_peers: Arc<AtomicI64>,
         shred_version: Arc<AtomicU16>,
         enable_proxy: bool,
     ) -> Self {
         Self {
             scraper,
-            version,
             num_peers,
             shred_version,
             enable_proxy,
@@ -200,7 +197,13 @@ impl RpcServer {
 
         // Handle different RPC methods
         let result = match method {
-            "getVersion" => json!(state.version),
+            "getVersion" => {
+                let info = state.scraper.get_cached_snapshot_info().await;
+                json!(RpcVersionInfo {
+                    solana_core: info.solana_version,
+                    feature_set: info.solana_feature_set,
+                })
+            }
             "getNumPeers" => {
                 json!(state.num_peers.load(std::sync::atomic::Ordering::Relaxed))
             }
@@ -232,7 +235,6 @@ impl RpcServer {
         // Create the application state
         let state = AppState {
             scraper: self.scraper.clone(),
-            version: self.version.clone(),
             num_peers: self.num_peers.clone(),
             shred_version: self.shred_version.clone(),
             enable_proxy: self.enable_proxy,
@@ -294,4 +296,12 @@ impl RpcServer {
         info!("RPC server started successfully");
         Ok(())
     }
+}
+
+#[derive(Serialize)]
+struct RpcVersionInfo {
+    #[serde(rename = "solana-core")]
+    solana_core: String,
+    #[serde(rename = "feature-set")]
+    feature_set: u32,
 }
