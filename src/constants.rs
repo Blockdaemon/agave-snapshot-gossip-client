@@ -22,8 +22,10 @@ pub const TESTNET_ENTRYPOINTS: &[&str] = &[
 //pub const TESTNET_SHRED_VERSION: u16 = 64475;
 
 pub const DEFAULT_SNAPSHOT_INFO_PATH: &str = "latest.json";
-pub const DEFAULT_SCRAPER_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
-pub const SOLANA_VALIDATOR_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+// do not use commas in the user agent string, it causes problems with the mock server
+pub const DEFAULT_SCRAPER_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/91.0.4472.124 Safari/537.36";
+pub const SOLANA_VALIDATOR_USER_AGENT: &str =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
 pub const DEFAULT_SCRAPER_CACHE_TTL_SECS: u64 = 5;
 pub const DEFAULT_GOSSIP_CRDS_TTL_SECS: u64 = 15;
 

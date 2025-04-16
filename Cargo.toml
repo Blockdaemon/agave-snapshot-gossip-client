@@ -62,6 +62,8 @@ targets = [
 [dev-dependencies]
 snapshot_gossip_client = { path = ".", package = "agave-snapshot-gossip-client" }
 bs58 = "*"
+hyper = "~1"
+wiremock = "*"
 
 [profile.release]
 opt-level = 3

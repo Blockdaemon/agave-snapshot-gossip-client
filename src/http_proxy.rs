@@ -3,7 +3,7 @@ use axum::{
     body::Body,
     http::{header, Request, Response, StatusCode, Uri},
 };
-use log::{info, warn};
+use log::{debug, warn};
 use reqwest::Client;
 
 use crate::constants::SOLANA_VALIDATOR_USER_AGENT;
@@ -13,26 +13,41 @@ pub fn create_proxy_client() -> Client {
     reqwest::ClientBuilder::new()
         .use_rustls_tls()
         .danger_accept_invalid_certs(true) // For development only
+        .user_agent(SOLANA_VALIDATOR_USER_AGENT)
         .build()
         .expect("Failed to create HTTP client")
 }
 
 // Fully functional proxy handler for Axum
+// Takes the target_uri and replaces the path with the path from the original request
 pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
-    info!("Proxying to {}", target_uri);
-
+    debug!("target URI: {}", target_uri);
     // Create client
     let client = create_proxy_client();
 
+    // Get the base URI from the target_uri by not including the path
+    let base_uri = format!(
+        "{}://{}",
+        target_uri.scheme().unwrap(),
+        target_uri.authority().unwrap()
+    );
+    debug!("Base URI: {}", base_uri);
+
+    // Get only the path from the original request
+    let path = req.uri().path();
+    debug!("Path: {}", path);
+
     // Build request based on method
     let mut request_builder = match req.method() {
-        &http::Method::GET => client.get(target_uri.to_string()),
-        &http::Method::POST => client.post(target_uri.to_string()),
-        &http::Method::PUT => client.put(target_uri.to_string()),
-        &http::Method::DELETE => client.delete(target_uri.to_string()),
-        &http::Method::HEAD => client.head(target_uri.to_string()),
-        &http::Method::OPTIONS => client.request(reqwest::Method::OPTIONS, target_uri.to_string()),
-        &http::Method::PATCH => client.patch(target_uri.to_string()),
+        &http::Method::GET => client.get(format!("{}{}", base_uri, path)),
+        &http::Method::POST => client.post(format!("{}{}", base_uri, path)),
+        &http::Method::PUT => client.put(format!("{}{}", base_uri, path)),
+        &http::Method::DELETE => client.delete(format!("{}{}", base_uri, path)),
+        &http::Method::HEAD => client.head(format!("{}{}", base_uri, path)),
+        &http::Method::OPTIONS => {
+            client.request(reqwest::Method::OPTIONS, format!("{}{}", base_uri, path))
+        }
+        &http::Method::PATCH => client.patch(format!("{}{}", base_uri, path)),
         _ => {
             return Response::builder()
                 .status(StatusCode::METHOD_NOT_ALLOWED)
@@ -43,17 +58,11 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
 
     // Copy headers from original request
     for (name, value) in req.headers() {
-        // Skip host header as it will be set by reqwest
-        if name != header::HOST {
+        // Skip host and user-agent headers as they will be set by reqwest
+        if name != header::HOST && name != header::USER_AGENT {
             request_builder = request_builder.header(name.clone(), value.clone());
         }
     }
-
-    // Add proxy headers
-    request_builder = request_builder
-        .header("X-Forwarded-Proto", "http")
-        .header("X-Forwarded-For", "unknown")
-        .header(header::USER_AGENT, SOLANA_VALIDATOR_USER_AGENT);
 
     // For non-GET requests, handle request body (snapshots use GET so this is simple for now)
     if req.method() != http::Method::GET && req.method() != http::Method::HEAD {
@@ -109,5 +118,67 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
                 .body(Body::from("Failed to build response"))
                 .unwrap()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Method;
+    use axum::http::Request;
+    use env_logger;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn test_proxy_user_agent() {
+        // Initialize test logger
+        let _ = env_logger::try_init();
+
+        // Start a mock server
+        let mock_server = MockServer::start().await;
+
+        // Set up the mock to expect a request with our user agent
+        Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/test"))
+            .and(wiremock::matchers::header(
+                "User-Agent",
+                SOLANA_VALIDATOR_USER_AGENT,
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_string("OK"))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // Create a test request
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(format!("{}/test", mock_server.uri()))
+            .header(header::USER_AGENT, "unknown") // set a "bad" user-agent to test that it is overridden
+            .body(Body::empty())
+            .unwrap();
+
+        // Create a test URI (just the base URI)
+        let target_uri = mock_server.uri().parse::<Uri>().unwrap();
+
+        // Call the proxy function
+        let response = proxy_to(target_uri, req).await;
+
+        // Print path and headers from received requests
+        let user_agent = wiremock::http::HeaderName::from_bytes(b"user-agent").unwrap();
+        let received_requests = mock_server
+            .received_requests()
+            .await
+            .expect("No requests received");
+        for request in received_requests {
+            println!("Request path {}", request.url.path());
+            println!(
+                "Request user-agent: {}",
+                request.headers.get(&user_agent).unwrap().to_str().unwrap()
+            );
+        }
+
+        // The response should be successful
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
