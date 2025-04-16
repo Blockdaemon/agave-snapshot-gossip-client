@@ -1,15 +1,16 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use log::{debug, info, warn};
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_gossip::contact_info::ContactInfo;
+use log::{debug, error, info, warn};
 use solana_gossip::gossip_service::GossipService;
+use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
 use solana_streamer::socket::SocketAddrSpace;
 use tokio;
@@ -17,6 +18,17 @@ use tokio;
 // Our local crates
 use super::config::ResolvedConfig;
 use super::ip_echo;
+use super::scraper::{MetadataScraper, SnapshotHashes};
+
+// Constants
+use crate::constants::DEFAULT_GOSSIP_CRDS_TTL_SECS;
+const MIN_PEERS: usize = 2;
+
+macro_rules! decode_hash {
+    ($hash_str:expr) => {
+        Hash::from_str($hash_str).map_err(anyhow::Error::msg)
+    };
+}
 
 trait ContactInfoDebugExt {
     fn debug(&self) -> String;
@@ -38,46 +50,122 @@ impl ContactInfoDebugExt for ContactInfo {
     }
 }
 
+#[derive(Debug)]
+struct GossipMonitorState {
+    last_push: Instant,
+    last_snapshot_hashes: Option<SnapshotHashes>,
+    connected: bool,
+    last_peer_count: usize,
+    last_shred_version: u16,
+}
+
+impl GossipMonitorState {
+    fn new() -> Self {
+        Self {
+            last_push: Instant::now(),
+            last_snapshot_hashes: None,
+            connected: false,
+            last_peer_count: 0,
+            last_shred_version: 0,
+        }
+    }
+
+    fn should_push(&self, current_hashes: &SnapshotHashes) -> (bool, bool) {
+        (
+            self.last_push.elapsed() > Duration::from_secs(DEFAULT_GOSSIP_CRDS_TTL_SECS - 2),
+            self.last_snapshot_hashes.as_ref() != Some(current_hashes),
+        )
+    }
+
+    fn push_snapshot_hashes(
+        &mut self,
+        cluster_info: &ClusterInfo,
+        snapshot_hashes: SnapshotHashes,
+    ) -> Result<()> {
+        let (full_slot, full_hash, incremental_hashes) = decode_snapshot_hashes(&snapshot_hashes)?;
+
+        info!("Pushing snapshot hashes: {:?}", snapshot_hashes);
+        cluster_info
+            .push_snapshot_hashes((full_slot, full_hash), incremental_hashes)
+            .map_err(|e| anyhow::anyhow!("Failed to push snapshot hashes: {}", e))?;
+
+        if let Some(hashes) = cluster_info.get_snapshot_hashes_for_node(&cluster_info.id()) {
+            info!("{} {:?}", cluster_info.id(), hashes);
+        }
+        self.last_push = Instant::now();
+        self.last_snapshot_hashes = Some(snapshot_hashes);
+        Ok(())
+    }
+}
+
 trait GossipMonitor {
     fn monitor_gossip(
         &self,
+        scraper: Arc<MetadataScraper>,
         exit: Arc<AtomicBool>,
         num_peers: Arc<AtomicI64>,
         shred_version: Arc<AtomicU16>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
+fn decode_snapshot_hashes(
+    snapshot_hashes: &SnapshotHashes,
+) -> Result<(u64, Hash, Vec<(u64, Hash)>)> {
+    let (full_slot, full_hash, incremental_hashes) = snapshot_hashes
+        .convert_snapshot_hashes()
+        .map_err(|e| anyhow::anyhow!("Failed to convert snapshot hashes: {}", e))?;
+
+    let full_hash = decode_hash!(&full_hash)
+        .map_err(|e| anyhow::anyhow!("Failed to decode full hash: {}", e))?;
+
+    let incremental_hashes = incremental_hashes
+        .into_iter()
+        .map(|(slot, hash)| decode_hash!(&hash).map(|hash| (slot, hash)))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to decode incremental hashes: {}", e))?;
+
+    Ok((full_slot, full_hash, incremental_hashes))
+}
+
 impl GossipMonitor for Arc<ClusterInfo> {
     fn monitor_gossip(
         &self,
+        scraper: Arc<MetadataScraper>,
         exit: Arc<AtomicBool>,
         num_peers: Arc<AtomicI64>,
         shred_version: Arc<AtomicU16>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
             warn!("Connecting to gossip...");
-            let start = std::time::Instant::now();
-            let mut last_peer_count = 0;
-            let mut last_shred_version = 0;
-            let mut connected = false;
+            let start = Instant::now();
+            let mut state = GossipMonitorState::new();
+
             while !exit.load(std::sync::atomic::Ordering::Relaxed) {
                 let peer_count = self.all_peers().len();
-                if peer_count > 2 && !connected {
-                    connected = true;
-                    warn!("Connected to gossip, {} peers", peer_count);
+                if peer_count < MIN_PEERS {
+                    if state.connected {
+                        warn!("Lost connection to gossip network, reconnecting...");
+                        state.connected = false;
+                    }
+                } else if !state.connected {
+                    info!("Connected to gossip network with {} peers", peer_count);
+                    state.connected = true;
                 }
 
-                let peers_changed = peer_count != last_peer_count;
+                let peers_changed = peer_count != state.last_peer_count;
 
                 for (peer, _) in self.all_peers() {
                     let is_me = peer.pubkey() == &self.id();
                     let shred_ver = peer.shred_version();
 
                     // Update shred version served by JSONRPC if it's me and has changed
-                    if is_me && shred_ver != 0 && shred_ver != last_shred_version {
-                        info!("Got shred version {} -> {}", last_shred_version, shred_ver);
+                    if is_me && shred_ver != 0 && shred_ver != state.last_shred_version {
+                        info!(
+                            "Got shred version {} -> {}",
+                            state.last_shred_version, shred_ver
+                        );
                         shred_version.store(shred_ver, std::sync::atomic::Ordering::SeqCst);
-                        last_shred_version = shred_ver;
+                        state.last_shred_version = shred_ver;
                     }
 
                     // Log peer info if peers changed and it's either me or a valid peer
@@ -96,9 +184,28 @@ impl GossipMonitor for Arc<ClusterInfo> {
                         peer_count.try_into().unwrap(),
                         std::sync::atomic::Ordering::SeqCst,
                     );
-                    last_peer_count = peer_count;
+                    state.last_peer_count = peer_count;
                 }
 
+                match scraper.get_snapshot_hashes().await {
+                    Ok(snapshot_hashes) => {
+                        let (ttl_reached, hash_changed) = state.should_push(&snapshot_hashes);
+                        if ttl_reached || hash_changed {
+                            match (ttl_reached, hash_changed) {
+                                (true, _) => info!(
+                                    "TTL reached, last push was {}s ago",
+                                    state.last_push.elapsed().as_secs()
+                                ),
+                                (_, true) => info!("Hashes changed"),
+                                _ => (),
+                            }
+                            if let Err(e) = state.push_snapshot_hashes(self, snapshot_hashes) {
+                                error!("{}", e);
+                            }
+                        }
+                    }
+                    Err(e) => error!("Failed to get snapshot hashes: {:?}", e),
+                }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
             info!("Gossip monitor service exited");
@@ -205,6 +312,7 @@ fn make_gossip_node(
 
 pub async fn start_gossip_client(
     resolved: &ResolvedConfig,
+    scraper: Arc<MetadataScraper>,
     exit: Arc<AtomicBool>,
     num_peers: Arc<AtomicI64>,
     shred_version: Arc<AtomicU16>,
@@ -240,12 +348,13 @@ pub async fn start_gossip_client(
     info!("Starting monitor service...");
     let monitor_handle = tokio::spawn({
         let cluster_info = cluster_info.clone();
+        let scraper = scraper.clone();
         let exit = exit.clone();
         let num_peers = num_peers.clone();
         let shred_version = shred_version.clone();
         async move {
             cluster_info
-                .monitor_gossip(exit, num_peers, shred_version)
+                .monitor_gossip(scraper, exit, num_peers, shred_version)
                 .await;
         }
     });
@@ -256,4 +365,39 @@ pub async fn start_gossip_client(
     });
 
     Ok((monitor_handle, gossip_handle))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_decoding() {
+        // Test empty hash
+        let result = decode_hash!("");
+        let err_msg = result.unwrap_err().to_string();
+        assert_eq!(err_msg, "string decoded to wrong size for hash");
+
+        // Test valid base58-encoded hash
+        let valid_hash_str = "BFz7BCSiUskXVu6VJy9UVvi3bfQryhFxSSQ24cF8Rsnr";
+        let valid_hash = decode_hash!(valid_hash_str).unwrap();
+        assert_eq!(valid_hash.as_ref().len(), 32);
+        // Verify the hash value is correct by checking the base58 encoding
+        assert_eq!(
+            bs58::encode(valid_hash.as_ref()).into_string(),
+            valid_hash_str
+        );
+
+        // Test invalid base58-encoded hash
+        let invalid_hash_str2 = "7fK9DcRjWmXpLqNtYvBwEaZxHkMlPjQn";
+        let result = decode_hash!(invalid_hash_str2);
+        let err_msg = result.unwrap_err().to_string();
+        assert_eq!(err_msg, "failed to decoded string to hash");
+
+        // Test another invalid base58-encoded hash
+        let invalid_hash_str = "too_short";
+        let result = decode_hash!(invalid_hash_str);
+        let err_msg = result.unwrap_err().to_string();
+        assert_eq!(err_msg, "failed to decoded string to hash");
+    }
 }

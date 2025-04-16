@@ -17,7 +17,6 @@ use clap::Parser;
 use env_logger;
 use igd::PortMappingProtocol;
 use log::{error, info, warn};
-use solana_version::Version;
 
 // Our local crates
 use gossip::start_gossip_client;
@@ -111,10 +110,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let num_peers = Arc::new(AtomicI64::new(0));
     let shred_version = Arc::new(AtomicU16::new(0));
 
+    // Create scraper
+    let scraper = Arc::new(MetadataScraper::new(
+        resolved.storage_path.clone(),
+        resolved.expected_genesis_hash.clone(),
+    ));
+
     // start gossip client if enabled
     let gossip_handles = if !resolved.disable_gossip {
         let (monitor_handle, gossip_handle) = start_gossip_client(
             &resolved,
+            scraper.clone(),
             exit.clone(),
             num_peers.clone(),
             shred_version.clone(),
@@ -131,14 +137,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    // Create scraper and rpc server
-    let scraper = MetadataScraper::new(
-        resolved.storage_path.clone(),
-        resolved.expected_genesis_hash.clone(),
-    );
+    // Create rpc server
     let rpc_server = RpcServer::new(
-        Arc::new(scraper),
-        Version::default().to_string(),
+        scraper,
         num_peers,
         shred_version,
         resolved.enable_proxy,

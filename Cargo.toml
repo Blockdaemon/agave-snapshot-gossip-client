@@ -39,6 +39,7 @@ clap = { version = "~4", features = ["derive"] }
 dns-lookup = "~2"
 env_logger = "*"
 get_if_addrs = "*"
+hex = "*"
 igd = "*"
 lazy_static = "~1"
 log = "*"
@@ -60,6 +61,7 @@ targets = [
 
 [dev-dependencies]
 snapshot_gossip_client = { path = ".", package = "agave-snapshot-gossip-client" }
+bs58 = "*"
 
 [profile.release]
 opt-level = 3
