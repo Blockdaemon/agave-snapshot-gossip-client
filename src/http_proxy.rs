@@ -51,7 +51,7 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
         _ => {
             return Response::builder()
                 .status(StatusCode::METHOD_NOT_ALLOWED)
-                .body(Body::from("Method not allowed for proxying"))
+                .body(Body::from("Method not allowed for proxying\n"))
                 .unwrap();
         }
     };
@@ -76,7 +76,7 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
             warn!("Proxy request failed: {}", e);
             return Response::builder()
                 .status(StatusCode::BAD_GATEWAY)
-                .body(Body::from(format!("Proxy error: {}", e)))
+                .body(Body::from(format!("Proxy error: {}\n", e)))
                 .unwrap();
         }
     };
@@ -92,7 +92,7 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
             warn!("Failed to read proxy response body: {}", e);
             return Response::builder()
                 .status(StatusCode::BAD_GATEWAY)
-                .body(Body::from("Failed to read upstream response"))
+                .body(Body::from("Failed to read upstream response\n"))
                 .unwrap();
         }
     };
@@ -115,7 +115,7 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
             warn!("Failed to build response: {}", e);
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from("Failed to build response"))
+                .body(Body::from("Failed to build response\n"))
                 .unwrap()
         }
     }

@@ -17,6 +17,7 @@ use tokio::net::TcpListener;
 
 // Our local crates
 use crate::constants::SNAPSHOT_REGEX;
+use crate::healthcheck;
 use crate::http_proxy;
 use crate::scraper::MetadataScraper;
 
@@ -112,7 +113,7 @@ impl RpcServer {
                 "Returning 404 for non-matching GET request: {} from {}",
                 path, peer_ip
             );
-            (StatusCode::NOT_FOUND, "Not Found").into_response()
+            (StatusCode::NOT_FOUND, "Not Found\n").into_response()
         }
     }
 
@@ -209,14 +210,14 @@ impl RpcServer {
         let method = match rpc_req.get("method").and_then(|m| m.as_str()) {
             Some(m) => m,
             None => {
-                let id = rpc_req.get("id").cloned();
+                let id = rpc_req.get("id").map(|v| v.clone());
                 return jsonrpc_error(-32600, "Invalid request", id, StatusCode::BAD_REQUEST);
             }
         };
 
         info!("Processing RPC method: {} from {}", method, peer_ip);
 
-        let id = rpc_req.get("id").cloned();
+        let id = rpc_req.get("id").map(|v| v.clone());
 
         // Handle different RPC methods
         let result = match method {
@@ -279,10 +280,13 @@ impl RpcServer {
                 );
                 Response::builder()
                     .status(StatusCode::METHOD_NOT_ALLOWED)
-                    .body(Body::from("Method Not Allowed"))
+                    .body(Body::from("Method Not Allowed\n"))
                     .unwrap()
             })
             .with_state(state);
+
+        // Add health check route
+        let app = healthcheck::add_health_check_route(app);
 
         // Create the TCP listener
         let listener = TcpListener::bind(addr).await?;
