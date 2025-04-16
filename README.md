@@ -62,6 +62,9 @@ The system supports three deployment models:
 
 2. Create a `config.toml` file (optional, see [example-config.toml](example-config.toml))
 
+- The only **required** setting is the `storage_path` to the snapshot location. Testnet is the default network.
+- To use a different network, change `entrypoints` and `expected_genesis_hash` to the correct values for that network.
+
 3. Run the client:
    ```bash
    RUST_LOG=warn cargo run -r
@@ -131,12 +134,8 @@ Note that even when `public_ip` is configured, IP echo is still attempted to get
 Explicit `public_ip` and `shred_version` configuration is always checked against `ip_echo` results.
 
 ## Known Issues
-   - Agave validators refuse to download snapshots from us, even though we are publicly reachable [issue #20](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/20)
-   - Still not entrypoint suitable [issue #19](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/19)
    - `--debug` builds may be unstable and have significantly higher memory and CPU usage. Use `-r` or `--release` to avoid this.
-   - The agave solana validator client may not honor HTTP redirect, so `enable_proxy` may be required ([issue #17](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/17)).
-   - We should probably not use STUN. Agave does without STUN ([issue #18](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/18)).
-   - Large dependency footprint from `solana_gossip`, huge memory and CPU usage for large gossip networks.
+   - Large crate dependency footprint, huge memory and CPU usage for large gossip networks.
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
 

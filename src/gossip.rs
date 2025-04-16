@@ -90,7 +90,7 @@ impl GossipMonitorState {
             .map_err(|e| anyhow::anyhow!("Failed to push snapshot hashes: {}", e))?;
 
         if let Some(hashes) = cluster_info.get_snapshot_hashes_for_node(&cluster_info.id()) {
-            info!("{} {:?}", cluster_info.id(), hashes);
+            debug!("{} {:?}", cluster_info.id(), hashes);
         }
         self.last_push = Instant::now();
         self.last_snapshot_hashes = Some(snapshot_hashes);
@@ -193,10 +193,10 @@ impl GossipMonitor for Arc<ClusterInfo> {
                         if ttl_reached || hash_changed {
                             match (ttl_reached, hash_changed) {
                                 (true, _) => info!(
-                                    "TTL reached, last push was {}s ago",
+                                    "TTL reached, last snapshot hash push was {}s ago",
                                     state.last_push.elapsed().as_secs()
                                 ),
-                                (_, true) => info!("Hashes changed"),
+                                (_, true) => info!("Snapshot hashes changed"),
                                 _ => (),
                             }
                             if let Err(e) = state.push_snapshot_hashes(self, snapshot_hashes) {
