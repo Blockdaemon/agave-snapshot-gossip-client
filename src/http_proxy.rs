@@ -6,6 +6,8 @@ use axum::{
 use log::{info, warn};
 use reqwest::Client;
 
+use crate::constants::SOLANA_VALIDATOR_USER_AGENT;
+
 // Create a proxy client with HTTPS support
 pub fn create_proxy_client() -> Client {
     reqwest::ClientBuilder::new()
@@ -50,7 +52,8 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
     // Add proxy headers
     request_builder = request_builder
         .header("X-Forwarded-Proto", "http")
-        .header("X-Forwarded-For", "unknown");
+        .header("X-Forwarded-For", "unknown")
+        .header(header::USER_AGENT, SOLANA_VALIDATOR_USER_AGENT);
 
     // For non-GET requests, handle request body (snapshots use GET so this is simple for now)
     if req.method() != http::Method::GET && req.method() != http::Method::HEAD {

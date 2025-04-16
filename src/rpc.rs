@@ -28,6 +28,15 @@ fn get_client_ip(req: &Request<Body>) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
+// Helper function to extract user agent from the request
+fn get_user_agent(req: &Request<Body>) -> String {
+    req.headers()
+        .get(header::USER_AGENT)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string()
+}
+
 // Helper function to create a JSON-RPC response
 fn jsonrpc_response(result: Value, id: Option<Value>, status_code: StatusCode) -> Response {
     let id = id.unwrap_or(Value::Null);
@@ -84,6 +93,13 @@ impl RpcServer {
 
     // This handler routes GET requests based on the path
     async fn handle_get_request(State(state): State<AppState>, req: Request<Body>) -> Response {
+        let client_ip = get_client_ip(&req);
+        let user_agent = get_user_agent(&req);
+        info!(
+            "GET request from {} with user agent: {}",
+            client_ip, user_agent
+        );
+
         let path = req.uri().path();
 
         if SNAPSHOT_REGEX.is_match(path) {
@@ -157,6 +173,13 @@ impl RpcServer {
         State(state): State<AppState>,
         req: Request<Body>,
     ) -> impl IntoResponse {
+        let client_ip = get_client_ip(&req);
+        let user_agent = get_user_agent(&req);
+        info!(
+            "RPC request from {} with user agent: {}",
+            client_ip, user_agent
+        );
+
         // Only handle POST requests for JSON-RPC
         if req.method() != Method::POST {
             return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed").into_response();
