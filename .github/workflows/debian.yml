@@ -1,0 +1,98 @@
+name: Debian Package Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+    paths-ignore:
+      - '.editorconfig'
+      - '.gitignore'
+      - '.github/workflows/docker.yml'
+      - 'scripts/prepare-release.sh'
+      - 'Dockerfile'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '.editorconfig'
+      - '.gitignore'
+      - '.github/workflows/docker.yml'
+      - 'scripts/prepare-release.sh'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-common.yml
+    with:
+      upload_artifacts: true
+      verify_version: true
+
+  build-deb:
+    name: Build Debian Package
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-x86_64
+          path: target/release
+
+      - name: Verify artifact exists
+        run: |
+          if [ ! -f "target/release/snapshot-gossip-client" ]; then
+            echo "Error: Build artifact not found"
+            exit 1
+          fi
+
+      - name: Set up Debian packaging environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y devscripts debhelper build-essential
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          DEBEMAIL: "ci@blockdaemon.com"
+        run: |
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            # For tagged releases, use the exact version
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # For non-tagged builds, append git hash
+            VERSION="0.1.0+git${GITHUB_SHA:0:7}"
+          fi
+          if [[ -z "$VERSION" ]]; then
+            echo "Error: VERSION is not defined."
+            exit 1
+          fi
+          dch --newversion "${VERSION}" --distribution unstable "Automated build"
+          dch --release ""
+          echo "PACKAGE_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build Debian package
+        run: |
+          dpkg-buildpackage -us -uc -b
+          mkdir -p artifacts
+          mv ../*.deb artifacts/
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: agave-snapshot-gossip-client_${{ steps.changelog.outputs.PACKAGE_VERSION }}_amd64.deb
+          path: artifacts/agave-snapshot-gossip-client_${{ steps.changelog.outputs.PACKAGE_VERSION }}_amd64.deb
+          retention-days: 5

@@ -1,0 +1,34 @@
+#!/bin/sh
+# preinst script for agave-snapshot-gossip-client
+
+set -e
+
+case "$1" in
+    install|upgrade)
+        # Create gossip-client group if it doesn't exist
+        if ! getent group gossip-client >/dev/null; then
+            addgroup --system gossip-client
+        fi
+
+        # Create gossip-client user if it doesn't exist
+        if ! getent passwd gossip-client >/dev/null; then
+            adduser --system --ingroup gossip-client --no-create-home --disabled-password gossip-client
+        fi
+        ;;
+
+    remove|deconfigure)
+        # Clean up when package is removed
+        systemctl stop gossip-client.service || true
+        systemctl disable gossip-client.service || true
+        ;;
+
+    abort-install|abort-upgrade|abort-remove|abort-deconfigure)
+        # Clean up if installation fails
+        systemctl stop gossip-client.service || true
+        systemctl disable gossip-client.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

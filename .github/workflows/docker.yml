@@ -6,9 +6,21 @@ on:
       - 'v*'
     branches:
       - main
+    paths-ignore:
+      - '.editorconfig'
+      - '.gitignore'
+      - '.github/workflows/debian.yml'
+      - 'scripts/prepare-release.sh'
+      - 'debian/*'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '.editorconfig'
+      - '.gitignore'
+      - '.github/workflows/debian.yml'
+      - 'scripts/prepare-release.sh'
+      - 'debian/*'
   workflow_dispatch:
 
 env:

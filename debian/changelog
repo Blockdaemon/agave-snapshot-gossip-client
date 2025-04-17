@@ -1,0 +1,5 @@
+agave-snapshot-gossip-client (0.1.0) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Blockdaemon <support@blockdaemon.com>  Wed, 16 Apr 2025 20:00:00 +0000

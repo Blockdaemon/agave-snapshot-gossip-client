@@ -64,6 +64,7 @@ jobs:
           cp target/release/snapshot-gossip-client artifacts/
           cp example-config.toml artifacts/
           cp README.md artifacts/
+          cp INSTALL.md artifacts/
 
       - name: Run tests
         run: |
@@ -73,7 +74,7 @@ jobs:
         if: ${{ inputs.upload_artifacts }}
         run: |
           cd artifacts
-          tar czf snapshot-gossip-client-linux-x86_64.tar.gz snapshot-gossip-client example-config.toml README.md
+          tar czf snapshot-gossip-client-linux-x86_64.tar.gz snapshot-gossip-client example-config.toml README.md INSTALL.md
 
       - name: Upload individual artifacts
         if: ${{ inputs.upload_artifacts }}

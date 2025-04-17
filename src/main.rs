@@ -76,7 +76,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    env_logger::init();
+    // Don't log timestamps under systemd
+    let mut builder = env_logger::Builder::from_default_env();
+    if std::env::var("INVOCATION_ID").is_ok() {
+        // We're running under systemd
+        builder.format_timestamp(None);
+    }
+    builder.init();
+
+    info!("Starting up");
+
     let config = config::load_config(Some(&cli.config));
     let resolved = config.resolve().await.map_err(|e| {
         error!("Failed to resolve configuration: {:?}", e);
