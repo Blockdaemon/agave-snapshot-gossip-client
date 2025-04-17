@@ -10,8 +10,8 @@ on:
       - '.editorconfig'
       - '.gitignore'
       - '.github/workflows/debian.yml'
-      - 'scripts/prepare-release.sh'
-      - 'debian/*'
+      - 'scripts/**'
+      - 'debian/**'
   pull_request:
     branches:
       - main
@@ -19,8 +19,8 @@ on:
       - '.editorconfig'
       - '.gitignore'
       - '.github/workflows/debian.yml'
-      - 'scripts/prepare-release.sh'
-      - 'debian/*'
+      - 'scripts/**'
+      - 'debian/**'
   workflow_dispatch:
 
 env:
@@ -28,16 +28,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
-    uses: ./.github/workflows/build-common.yml
-    with:
-      upload_artifacts: true
-      verify_version: true
-
   build-and-push:
     name: Build and Push Docker Image
-    needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
@@ -47,8 +40,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v3
         with:
+          workflow: build.yml
           name: linux-x86_64
           path: artifacts
 

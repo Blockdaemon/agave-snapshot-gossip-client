@@ -9,7 +9,7 @@ Group=gossip-client
 ExecStart=/usr/sbin/snapshot-gossip-client -c /etc/gossip-client/config.toml
 Restart=always
 RestartSec=3
-Environment=RUST_LOG=info
+Environment=RUST_LOG=solana_metrics::metrics=off,solana_gossip::cluster_info=off,info
 
 [Install]
 WantedBy=multi-user.target

@@ -8,18 +8,20 @@ on:
       - main
     paths-ignore:
       - '.editorconfig'
+      - '.dockerignore'
       - '.gitignore'
       - '.github/workflows/docker.yml'
-      - 'scripts/prepare-release.sh'
+      - 'scripts/**'
       - 'Dockerfile'
   pull_request:
     branches:
       - main
     paths-ignore:
       - '.editorconfig'
+      - '.dockerignore'
       - '.gitignore'
       - '.github/workflows/docker.yml'
-      - 'scripts/prepare-release.sh'
+      - 'scripts/**'
       - 'Dockerfile'
   workflow_dispatch:
 
@@ -28,16 +30,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
-    uses: ./.github/workflows/build-common.yml
-    with:
-      upload_artifacts: true
-      verify_version: true
-
   build-deb:
     name: Build Debian Package
-    needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
@@ -45,10 +40,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v3
         with:
+          workflow: build.yml
           name: linux-x86_64
           path: target/release
 
@@ -73,8 +72,10 @@ jobs:
             # For tagged releases, use the exact version
             VERSION=${GITHUB_REF#refs/tags/v}
           else
-            # For non-tagged builds, append git hash
-            VERSION="0.1.0+git${GITHUB_SHA:0:7}"
+            # For non-tagged builds, use latest tag + git hash
+            LATEST_TAG=$(git describe --tags --abbrev=0)
+            BASE_VERSION=${LATEST_TAG#v}
+            VERSION="${BASE_VERSION}+git${GITHUB_SHA:0:7}"
           fi
           if [[ -z "$VERSION" ]]; then
             echo "Error: VERSION is not defined."

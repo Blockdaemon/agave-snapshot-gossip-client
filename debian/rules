@@ -17,7 +17,8 @@ override_dh_auto_install:
 
 	# Install changelog and default debian config
 	install -m 644 debian/changelog debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
-	install -m 644 debian/default-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/default-config.toml
+	mkdir -p debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/examples
+	install -m 644 debian/default-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/examples/config.toml
 
 	# Install documentation
 	install -m 644 example-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/example-config.toml

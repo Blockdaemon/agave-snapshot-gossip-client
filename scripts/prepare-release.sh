@@ -29,6 +29,22 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Get current branch
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
+DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
+
+# Check if we're on the default branch
+if [ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
+    echo "Error: Must be on the default branch ($DEFAULT_BRANCH) to prepare a release"
+    exit 1
+fi
+
+# fetch the latest changes from origin
+git fetch origin
+
+# Force reset debian/changelog to origin
+git checkout origin/$DEFAULT_BRANCH -- debian/changelog
+
 TAG="v${VERSION}"
 TIMESTAMP=$(date -R)
 
@@ -38,8 +54,6 @@ sed -i '' "s/^version = .*/version = \"${VERSION}\"/" Cargo.toml
 # Build and verify version
 echo "Building and verifying version..."
 cargo fmt
-# do this a few times to ensure all dependencies are up to date
-cargo update
 cargo update
 cargo check
 cargo build
@@ -47,13 +61,30 @@ cargo build
 
 # Function to update changelog
 update_changelog() {
-    # Add a new changelog section at the top
-    local changelog_entry="agave-snapshot-gossip-client (${VERSION}) unstable; urgency=medium
+    # Get the last tag
+    local last_tag=$(git describe --abbrev=0 --tags)
 
-  * Release ${VERSION}
+    # Get changes since last tag
+    local changes=$(git log --reverse --pretty=format:"  * %s" ${last_tag}..HEAD)
+
+    # Check if this version already exists in changelog
+    if grep -q "agave-snapshot-gossip-client (${VERSION})" debian/changelog; then
+        echo "Warning: Version ${VERSION} already exists in changelog. Skipping changelog update."
+        return
+    fi
+
+    # Add a new changelog section at the top
+    local changelog_entry
+    changelog_entry=$(cat <<EOF
+agave-snapshot-gossip-client (${VERSION}) unstable; urgency=medium
+
+${changes}
 
  -- Blockdaemon <support@blockdaemon.com>  ${TIMESTAMP}
-"
+
+EOF
+    )
+
     # Insert the new entry at the top of the file
     echo -e "${changelog_entry}$(cat debian/changelog)" > debian/changelog
 }

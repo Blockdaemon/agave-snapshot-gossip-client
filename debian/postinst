@@ -7,7 +7,7 @@ case "$1" in
     configure)
         # Install default config if it doesn't exist
         if [ ! -f /etc/gossip-client/config.toml ]; then
-            cp /usr/share/doc/agave-snapshot-gossip-client/default-config.toml /etc/gossip-client/config.toml
+            cp /usr/share/doc/agave-snapshot-gossip-client/examples/config.toml /etc/gossip-client/config.toml
         fi
 
         # Set ownership and permissions
