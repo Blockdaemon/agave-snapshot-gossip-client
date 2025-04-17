@@ -1,0 +1,50 @@
+name: Build Trigger
+
+on:
+  workflow_call:
+    inputs:
+      workflow_id:
+        type: string
+        required: true
+        description: 'The workflow to trigger'
+      paths:
+        type: string
+        required: true
+        description: 'Comma-separated list of paths to include'
+      exclude_paths:
+        type: string
+        required: false
+        description: 'Comma-separated list of paths to exclude'
+
+jobs:
+  trigger:
+    name: Trigger ${{ inputs.workflow_id }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check paths
+        run: |
+          # Convert comma-separated lists to arrays
+          INCLUDES=(${INPUT_PATHS//,/ })
+          EXCLUDES=(${INPUT_EXCLUDE_PATHS//,/ })
+          
+          # Check if any included paths were modified
+          for path in "${INCLUDES[@]}"; do
+            if git diff --name-only HEAD^ HEAD | grep -q "^$path"; then
+              echo "Changes detected in $path"
+              exit 0
+            fi
+          done
+          
+          # Check if any excluded paths were modified
+          for path in "${EXCLUDES[@]}"; do
+            if git diff --name-only HEAD^ HEAD | grep -q "^$path"; then
+              echo "Changes detected in excluded path $path"
+              exit 1
+            fi
+          done
+          
+          echo "No relevant changes, skipping workflow"
+          exit 1
+        env:
+          INPUT_PATHS: ${{ inputs.paths }}
+          INPUT_EXCLUDE_PATHS: ${{ inputs.exclude_paths || '' }} 

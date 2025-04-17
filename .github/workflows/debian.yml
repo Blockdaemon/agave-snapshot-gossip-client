@@ -1,41 +1,21 @@
 name: Debian Package Build
 
 on:
-  push:
-    tags:
-      - 'v*'
-    branches:
-      - main
-    paths-ignore:
-      - '.editorconfig'
-      - '.dockerignore'
-      - '.gitignore'
-      - '.github/workflows/docker.yml'
-      - 'scripts/**'
-      - 'Dockerfile'
-  pull_request:
-    branches:
-      - main
-    paths-ignore:
-      - '.editorconfig'
-      - '.dockerignore'
-      - '.gitignore'
-      - '.github/workflows/docker.yml'
-      - 'scripts/**'
-      - 'Dockerfile'
-  workflow_dispatch:
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  workflow_call:
+  # Note: Path checking should be done at the job level, not in workflow_run context
+  # paths:
+  #   - '.github/workflows/**'
+  #   - '**/*.rs'
+  #   - '**/Cargo.toml'
+  #   - '**/Cargo.lock'
+  #   - 'debian/**'
+  # exclude_paths:
+  #   - '.github/workflows/docker.yml'
 
 jobs:
   build-deb:
     name: Build Debian Package
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
@@ -45,9 +25,8 @@ jobs:
           fetch-tags: true
 
       - name: Download build artifacts
-        uses: dawidd6/action-download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          workflow: build.yml
           name: linux-x86_64
           path: target/release
 

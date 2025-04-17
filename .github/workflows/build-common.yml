@@ -36,10 +36,7 @@ jobs:
       - name: Setup cargo cache
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/Cargo.toml') }}
-          shared-key: |
-            ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-            ${{ runner.os }}
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           workspaces: |
             .
           cache-targets: true

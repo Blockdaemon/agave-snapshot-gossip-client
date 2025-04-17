@@ -19,48 +19,65 @@ fi
 
 echo "Fetching latest build..."
 
-# Get the latest successful workflow run
-RUN_URL="https://api.github.com/repos/$REPO/actions/runs?per_page=5&status=completed&workflow=debian.yml"
-RUN_INFO=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$RUN_URL")
+# Try build workflow first, then release workflow
+for workflow in "build" "release"; do
+    echo "Checking $workflow workflow..."
+    
+    # Get the latest successful workflow run
+    RUN_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+      "https://api.github.com/repos/$REPO/actions/workflows/$workflow.yml/runs?status=success&per_page=1" | \
+      jq -r '.workflow_runs[0].id')
 
-# Find the first successful run
-RUN_ID=""
-for i in $(seq 0 4); do
-    RUN=$(echo "$RUN_INFO" | jq -r ".workflow_runs[$i]")
-    if [ "$RUN" = "null" ]; then
+    if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+        echo "No successful runs found for $workflow workflow"
+        continue
+    fi
+
+    echo "Found workflow run ID: $RUN_ID"
+
+    # Check if the run has artifacts
+    echo "Checking for artifacts..."
+    ARTIFACT_URL="https://api.github.com/repos/$REPO/actions/runs/$RUN_ID/artifacts"
+    ARTIFACT_RESPONSE=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$ARTIFACT_URL")
+    ARTIFACT_COUNT=$(echo "$ARTIFACT_RESPONSE" | jq -r '.total_count')
+
+    if [ "$ARTIFACT_COUNT" -eq 0 ]; then
+        echo "No artifacts found in run $RUN_ID"
+        continue
+    fi
+
+    # Get workflow run details including jobs
+    echo "Getting workflow run details..."
+    RUN_DETAILS_URL="https://api.github.com/repos/$REPO/actions/runs/$RUN_ID"
+    RUN_DETAILS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$RUN_DETAILS_URL")
+
+    # Get the runner environment
+    RUNNER=$(echo "$RUN_DETAILS" | jq -r '.runner_name')
+
+    # Get the artifact
+    echo "Getting artifact..."
+    ARTIFACT_URL="https://api.github.com/repos/$REPO/actions/runs/$RUN_ID/artifacts"
+    ARTIFACT_RESPONSE=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$ARTIFACT_URL")
+    ARTIFACT_ID=$(echo "$ARTIFACT_RESPONSE" | jq -r '.artifacts[] | select(.name=="linux-x86_64") | .id')
+
+    if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
+        echo "Found artifact ID: $ARTIFACT_ID"
+        # Get the workflow run timestamp
+        RUN_TIMESTAMP=$(echo "$RUN_DETAILS" | jq -r '.created_at')
+        # Convert to Unix timestamp
+        RUN_UNIX=$(date -jf "%Y-%m-%dT%H:%M:%SZ" "$RUN_TIMESTAMP" +%s)
+        NOW_UNIX=$(date +%s)
+        # Calculate hours elapsed
+        HOURS_ELAPSED=$(( (NOW_UNIX - RUN_UNIX) / 3600 ))
+        echo "$RUN_TIMESTAMP is $HOURS_ELAPSED hours ago"
+        # Successfully found an artifact
         break
     fi
-    CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
-    RUN_ID=$(echo "$RUN" | jq -r '.id')
-    if [ "$CONCLUSION" = "success" ]; then
-        break
-    fi
-    RUN_ID=""
+    echo "Failed to get artifact ID from $ARTIFACT_URL"
 done
 
-if [ -z "$RUN_ID" ]; then
-    echo "Failed to find a successful workflow run"
-    exit 1
-fi
-
-echo "Found workflow run ID: $RUN_ID"
-
-# Get workflow run details including jobs
-echo "Getting workflow run details..."
-RUN_DETAILS_URL="https://api.github.com/repos/$REPO/actions/runs/$RUN_ID"
-RUN_DETAILS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$RUN_DETAILS_URL")
-
-# Get the runner environment
-RUNNER=$(echo "$RUN_DETAILS" | jq -r '.runner_name')
-
-# Get the artifact
-echo "Getting artifact..."
-ARTIFACT_URL="https://api.github.com/repos/$REPO/actions/runs/$RUN_ID/artifacts"
-ARTIFACT_RESPONSE=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$ARTIFACT_URL")
-ARTIFACT_ID=$(echo "$ARTIFACT_RESPONSE" | jq -r '.artifacts[] | select(.name=="linux-x86_64") | .id')
-
 if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" == "null" ]; then
-    echo "Failed to get artifact ID from $ARTIFACT_URL"
+    echo "Error: No artifacts found in either workflow"
     exit 1
 fi
 
@@ -69,6 +86,12 @@ curl -s -L -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.
     "https://api.github.com/repos/$REPO/actions/artifacts/$ARTIFACT_ID/zip" -o "$TMPDIR/artifact.zip"
 unzip -q -o -j "$TMPDIR/artifact.zip" "snapshot-gossip-client" -d target/x86_64-unknown-linux-gnu/release/
 rm "$TMPDIR/artifact.zip"
+
+# Check if we found and downloaded an artifact
+if [ ! -f "target/x86_64-unknown-linux-gnu/release/snapshot-gossip-client" ]; then
+    echo "Error: No successful builds with artifacts found in either workflow"
+    exit 1
+fi
 
 # Check glibc version
 GLIBC_VERSION=$(objdump -T target/x86_64-unknown-linux-gnu/release/snapshot-gossip-client | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n1 | sed 's/GLIBC_//')

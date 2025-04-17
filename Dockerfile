@@ -35,5 +35,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 USER snapshot-gossip-client
 
 # Set the entrypoint
-ENV RUST_LOG=info
+ENV RUST_LOG=solana_metrics::metrics=off,solana_gossip::cluster_info=off,info
 ENTRYPOINT ["/usr/local/sbin/snapshot-gossip-client", "-c", "/etc/snapshot-gossip-client/config.toml"]

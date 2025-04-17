@@ -1,9 +1,25 @@
-name: Build and Release
+name: Build
 
 on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main 
+    paths:
+      - '.github/workflows/**'
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
   push:
-    tags:
-      - 'v*'  # Trigger on version tags like v1.0.0
+    branches:
+      - main
+    tags-ignore:
+      - 'v*'  # Ignore version tags
+    paths:
+      - '.github/workflows/**'
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
@@ -13,27 +29,25 @@ jobs:
       upload_artifacts: true
       verify_version: true
 
-  release:
-    name: Create Release
+  docker:
     needs: build
-    runs-on: ubuntu-22.04
-    if: startsWith(github.ref, 'refs/tags/')
+    if: |
+      !failure() && !cancelled() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+    uses: ./.github/workflows/docker.yml
+    permissions:
+      contents: read
+      packages: write
 
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            artifacts/linux-x86_64/snapshot-gossip-client
-            artifacts/linux-x86_64/example-config.toml
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+  debian:
+    needs: build
+    if: |
+      !failure() && !cancelled() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+    uses: ./.github/workflows/debian.yml
+    permissions:
+      contents: read
+      packages: write
 
 permissions:
-  contents: write  # This allows creating releases
+  contents: read
