@@ -41,8 +41,9 @@ cargo fmt
 # do this a few times to ensure all dependencies are up to date
 cargo update
 cargo update
-cargo build --release
-./target/release/snapshot-gossip-client --version
+cargo check
+cargo build
+./target/debug/snapshot-gossip-client --version
 
 # Function to update changelog
 update_changelog() {
@@ -73,7 +74,7 @@ run_git_cmd() {
 # Commit the version updates
 run_git_cmd "git add Cargo.toml Cargo.lock debian/changelog"
 run_git_cmd "git commit -m \"Bump version to ${VERSION}\" || true"
-run_git_cmd "git tag -d \"${TAG}\" || true"
+run_git_cmd "git tag -d \"${TAG}\" > /dev/null 2>&1 || true"
 run_git_cmd "git tag -a \"${TAG}\" -m \"Release ${TAG}\""
 
 if [ "$DRY_RUN" = true ]; then

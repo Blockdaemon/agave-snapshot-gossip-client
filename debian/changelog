@@ -1,3 +1,13 @@
+agave-snapshot-gossip-client (0.1.1) unstable; urgency=medium
+
+  * Release 0.1.1
+
+ -- Blockdaemon <support@blockdaemon.com>  Thu, 17 Apr 2025 00:11:15 -0700
+agave-snapshot-gossip-client (0.1.1) unstable; urgency=medium
+
+  * Release 0.1.1
+
+ -- Blockdaemon <support@blockdaemon.com>  Thu, 17 Apr 2025 00:10:55 -0700
 agave-snapshot-gossip-client (0.1.0) unstable; urgency=medium
 
   * Initial release.
