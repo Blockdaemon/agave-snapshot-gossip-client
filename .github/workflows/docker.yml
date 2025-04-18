@@ -2,16 +2,6 @@ name: Docker Build and Publish
 
 on:
   workflow_call:
-  # Note: Path checking should be done at the job level, not in workflow_run context
-  # paths:
-  #   - '.github/workflows/**'
-  #   - '**/*.rs'
-  #   - '**/Cargo.toml'
-  #   - '**/Cargo.lock'
-  #   - '.dockerignore'
-  #   - 'Dockerfile'
-  # exclude_paths:
-  #   - '.github/workflows/debian.yml'
 
 env:
   REGISTRY: ghcr.io
@@ -30,7 +20,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: linux-x86_64
-          path: artifacts/linux-x86_64
+          path: artifacts
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -68,4 +58,4 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BINARY_PATH=artifacts/linux-x86_64/snapshot-gossip-client
+            BINARY_PATH=artifacts/snapshot-gossip-client

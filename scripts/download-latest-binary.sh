@@ -22,7 +22,7 @@ echo "Fetching latest build..."
 # Try build workflow first, then release workflow
 for workflow in "build" "release"; do
     echo "Checking $workflow workflow..."
-    
+
     # Get the latest successful workflow run
     RUN_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
       "https://api.github.com/repos/$REPO/actions/workflows/$workflow.yml/runs?status=success&per_page=1" | \
@@ -64,11 +64,11 @@ for workflow in "build" "release"; do
         echo "Found artifact ID: $ARTIFACT_ID"
         # Get the workflow run timestamp
         RUN_TIMESTAMP=$(echo "$RUN_DETAILS" | jq -r '.created_at')
-        # Convert to Unix timestamp
-        RUN_UNIX=$(date -jf "%Y-%m-%dT%H:%M:%SZ" "$RUN_TIMESTAMP" +%s)
-        NOW_UNIX=$(date +%s)
-        # Calculate hours elapsed
-        HOURS_ELAPSED=$(( (NOW_UNIX - RUN_UNIX) / 3600 ))
+        # Use Python for reliable timestamp comparison, MacOS date command can't handle timezone conversions
+        HOURS_ELAPSED=$(python3 -c "from datetime import datetime, timezone; import sys; \
+            run_time = datetime.strptime(sys.argv[1], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc); \
+            now = datetime.now(timezone.utc); \
+            print(int((now - run_time).total_seconds() / 3600))" "$RUN_TIMESTAMP")
         echo "$RUN_TIMESTAMP is $HOURS_ELAPSED hours ago"
         # Successfully found an artifact
         break

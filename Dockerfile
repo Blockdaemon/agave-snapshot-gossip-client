@@ -1,7 +1,7 @@
 # Final stage
 FROM debian:bookworm-slim
 
-# Default binary path for local builds
+# Default binary path for local builds - NOT for CI, which overrides this
 ARG BINARY_PATH=target/x86_64-unknown-linux-gnu/release/snapshot-gossip-client
 
 # Install only runtime dependencies and clean up in one layer

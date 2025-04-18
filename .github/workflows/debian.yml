@@ -2,15 +2,6 @@ name: Debian Package Build
 
 on:
   workflow_call:
-  # Note: Path checking should be done at the job level, not in workflow_run context
-  # paths:
-  #   - '.github/workflows/**'
-  #   - '**/*.rs'
-  #   - '**/Cargo.toml'
-  #   - '**/Cargo.lock'
-  #   - 'debian/**'
-  # exclude_paths:
-  #   - '.github/workflows/docker.yml'
 
 jobs:
   build-deb:

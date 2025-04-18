@@ -7,3 +7,4 @@
 !src
 !README.md
 !target/x86_64-unknown-linux-gnu/release/snapshot-gossip-client
+!artifacts/
