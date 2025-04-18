@@ -63,8 +63,9 @@ The system supports three deployment models:
 
 2. Create a `config.toml` file (optional, see [example-config.toml](example-config.toml))
 
-- The only **required** setting is the `storage_path` to the snapshot location. Testnet is the default network.
-- To use a different network, change `entrypoints` and `expected_genesis_hash` to the correct values for that network.
+- The only **required** setting is the `storage_path` to the snapshot location.
+- To use a different network, simply set the `network` field to "devnet", "testnet", or "mainnet". The correct entrypoints and expected genesis hash will be automatically configured.
+- For advanced users, you can still manually configure `entrypoints` and `expected_genesis_hash` if needed.
 
 3. Run the client:
    ```bash
@@ -85,22 +86,23 @@ See the [Installation Guide](INSTALL.md) file for more information on installing
 
 Use `--config <path>` to specify a custom config file location. Default is `config.toml` in the current working directory.
 
-| Option                   | Default                   | Description                 |
-|--------------------------|---------------------------|-----------------------------|
-| `entrypoints`            | Testnet                   | Gossip network entry points |
-| `shred_version`          | None                      | Expected shred version      |
-| `expected_genesis_hash`  | None                      | Expected genesis hash       |
-| `keypair_path`           | `keypair.json`            | Path to keypair file        |
-| `listen_ip`              | `0.0.0.0`                 | Local bind/listen IP        |
-| `public_ip`              | Auto (STUN)               | Public IP address           |
-| `enable_stun`            | `false`                   | Use STUN to discover public IP instead of `ip_echo` |
-| `stun_server`            | `stun.l.google.com:3478`  | STUN server address         |
-| `disable_gossip`         | `false`                   | Disable gossip client       |
-| `gossip_port`            | `8001`                    | Gossip listen port          |
-| `rpc_port`               | `8899`                    | RPC listen port             |
-| `enable_upnp`            | `false`                   | Enable UPnP port forwarding |
-| `storage_path`           | None                      | Redirect/proxy target URL   |
-| `enable_proxy`           | `false`                   | Reverse proxy GET requests instead of redirecting |
+| Option                  | Default                  | Description                       |
+|-------------------------|--------------------------|-----------------------------------|
+| `network`               | Testnet                  | "devnet", "testnet", or "mainnet" |
+| `entrypoints`           | Follow `network`         | Gossip entrypoint override        |
+| `expected_genesis_hash` | None/Auto                | Expected genesis hash override    |
+| `shred_version`         | None                     | Expected shred version override   |
+| `keypair_path`          | `keypair.json`           | Path to keypair file              |
+| `listen_ip`             | `0.0.0.0`                | Local bind/listen IP              |
+| `public_ip`             | Auto (STUN)              | Public IP address                 |
+| `enable_stun`           | `false`                  | Use STUN to discover public IP instead of `ip_echo` |
+| `stun_server`           | `stun.l.google.com:3478` | STUN server address               |
+| `disable_gossip`        | `false`                  | Disable gossip client             |
+| `gossip_port`           | `8001`                   | Gossip listen port                |
+| `rpc_port`              | `8899`                   | RPC listen port                   |
+| `enable_upnp`           | `false`                  | Enable UPnP port forwarding       |
+| `storage_path`          | None                     | Redirect/proxy target URL         |
+| `enable_proxy`          | `false`                  | Reverse proxy GET requests instead of redirecting |
 
 `shred_version` is used when joining the gossip network. If you have issues
 connecting to gossip, try setting it to the correct network value. If not

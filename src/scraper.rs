@@ -74,6 +74,12 @@ pub struct SnapshotInfo {
 
 impl SnapshotInfo {
     fn extract_hash_from_url(url: &str) -> Result<String, ScraperError> {
+        if url.is_empty() {
+            return Err(ScraperError::ParseError(
+                "Empty snapshot URL provided".to_string(),
+            ));
+        }
+
         // Check URL format
         let url = url
             .strip_prefix("https://")
@@ -102,7 +108,14 @@ impl SnapshotInfo {
     }
 
     pub fn get_snapshot_hashes(&self) -> Result<SnapshotHashes, ScraperError> {
-        // First check URL format for full snapshot
+        // First check if we have a full snapshot URL
+        if self.full_snapshot_url.is_empty() {
+            return Err(ScraperError::NetworkError(
+                "No full snapshot URL available. The snapshot service may not be ready or configured correctly.".to_string(),
+            ));
+        }
+
+        // Then check URL format for full snapshot
         let full_hash = Self::extract_hash_from_url(&self.full_snapshot_url)?;
 
         // Then check URL format for incremental snapshot
@@ -251,7 +264,7 @@ impl MetadataScraper {
         if let Some(expected_genesis_hash) = &self.expected_genesis_hash {
             if info.genesis_hash != *expected_genesis_hash {
                 return Err(ScraperError::NetworkMismatch(format!(
-                    "Genesis hash is {}, expected {}",
+                    "Genesis hash mismatch: got {}, expected {}. This indicates you are trying to connect to the wrong network. Please check your network configuration and expected_genesis_hash setting.",
                     info.genesis_hash, expected_genesis_hash
                 )));
             }

@@ -4,8 +4,11 @@
 # `shred_version` is recommended but not strictly required.
 #
 
-# Optional: Entrypoints to connect to the gossip network (default: testnet)
-# If you want to override to devnet:
+# Optional: Network to connect to (devnet, testnet, or mainnet)
+# If not specified, will use testnet
+#network = "testnet"
+
+# Optional: Custom entrypoints (overrides network selection)
 #entrypoints = [
 #    "entrypoint.devnet.solana.com:8001",
 #    "entrypoint2.devnet.solana.com:8001",

@@ -10,7 +10,9 @@ use serde::Deserialize;
 // our local crates
 use crate::constants::{
     DEFAULT_CONFIG_PATH, DEFAULT_GOSSIP_PORT, DEFAULT_KEYPAIR_PATH, DEFAULT_LISTEN_IP,
-    DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, TESTNET_ENTRYPOINTS,
+    DEFAULT_RPC_PORT, DEFAULT_STUN_PORT, DEFAULT_STUN_SERVER, DEVNET_ENTRYPOINTS,
+    DEVNET_GENESIS_HASH, MAINNET_ENTRYPOINTS, MAINNET_GENESIS_HASH, TESTNET_ENTRYPOINTS,
+    TESTNET_GENESIS_HASH,
 };
 use crate::stun::{StunClient, StunError};
 
@@ -20,6 +22,7 @@ pub struct Config {
     pub keypair_path: Option<String>,
 
     // What network to connect to
+    pub network: Option<String>, // "devnet", "testnet", or "mainnet"
     pub entrypoints: Option<Vec<String>>,
     pub expected_genesis_hash: Option<String>,
     pub shred_version: Option<u16>,
@@ -177,10 +180,36 @@ impl Config {
     pub async fn resolve(&self) -> Result<ResolvedConfig, ConfigError> {
         // Resolve entrypoints first since we need them for both IP echo and final config
         let mut resolved_entrypoints = Vec::new();
-        let entrypoint_strings = self
-            .entrypoints
-            .clone()
-            .unwrap_or_else(|| TESTNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect());
+        let (entrypoint_strings, default_genesis_hash) = if let Some(network) = &self.network {
+            match network.to_lowercase().as_str() {
+                "devnet" => (
+                    DEVNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect(),
+                    Some(DEVNET_GENESIS_HASH.to_string()),
+                ),
+                "testnet" => (
+                    TESTNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect(),
+                    Some(TESTNET_GENESIS_HASH.to_string()),
+                ),
+                "mainnet" => (
+                    MAINNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect(),
+                    Some(MAINNET_GENESIS_HASH.to_string()),
+                ),
+                _ => {
+                    warn!("Unknown network: {}, using testnet", network);
+                    (
+                        TESTNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect(),
+                        Some(TESTNET_GENESIS_HASH.to_string()),
+                    )
+                }
+            }
+        } else {
+            (
+                self.entrypoints.clone().unwrap_or_else(|| {
+                    TESTNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect()
+                }),
+                None,
+            )
+        };
 
         for addr in entrypoint_strings {
             match Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT) {
@@ -265,13 +294,16 @@ impl Config {
             })?),
         };
 
+        // Use the network's default genesis hash if none is specified
+        let expected_genesis_hash = self.expected_genesis_hash.clone().or(default_genesis_hash);
+
         Ok(ResolvedConfig {
             keypair_path: self
                 .keypair_path
                 .clone()
                 .unwrap_or_else(|| DEFAULT_KEYPAIR_PATH.to_string()),
             entrypoints: resolved_entrypoints,
-            expected_genesis_hash: self.expected_genesis_hash.clone(),
+            expected_genesis_hash,
             shred_version,
             listen_ip: self
                 .listen_ip
@@ -306,6 +338,7 @@ pub fn load_config(config_path: Option<&str>) -> Config {
             warn!("No {} found, using defaults", path);
             Config {
                 keypair_path: None,
+                network: None,
                 entrypoints: None,
                 enable_stun: None,
                 stun_server: None,
