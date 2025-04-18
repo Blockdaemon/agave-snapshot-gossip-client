@@ -29,6 +29,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Function to run git commands with dry run support
+run_git_cmd() {
+    local cmd="$1"
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY RUN] Would run: $cmd"
+    else
+        eval "$cmd"
+    fi
+}
+
 # Get current branch
 CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
 DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
@@ -59,6 +69,9 @@ cargo check
 cargo build
 ./target/debug/snapshot-gossip-client --version
 
+# remove the tag if it already exists so we can get the changelog properly
+run_git_cmd "git tag -d \"${TAG}\" > /dev/null 2>&1 || true"
+
 # Function to update changelog
 update_changelog() {
     # Get the last tag
@@ -86,26 +99,15 @@ EOF
     )
 
     # Insert the new entry at the top of the file
-    echo -e "${changelog_entry}$(cat debian/changelog)" > debian/changelog
+    echo -e "${changelog_entry}\n\n$(cat debian/changelog)" > debian/changelog
 }
 
 # Update the changelog
 update_changelog
 
-# Function to run git commands with dry run support
-run_git_cmd() {
-    local cmd="$1"
-    if [ "$DRY_RUN" = true ]; then
-        echo "[DRY RUN] Would run: $cmd"
-    else
-        eval "$cmd"
-    fi
-}
-
 # Commit the version updates
 run_git_cmd "git add Cargo.toml Cargo.lock debian/changelog"
 run_git_cmd "git commit -m \"Bump version to ${VERSION}\" || true"
-run_git_cmd "git tag -d \"${TAG}\" > /dev/null 2>&1 || true"
 run_git_cmd "git tag -a \"${TAG}\" -m \"Release ${TAG}\""
 
 if [ "$DRY_RUN" = true ]; then

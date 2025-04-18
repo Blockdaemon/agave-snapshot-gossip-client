@@ -21,8 +21,8 @@ RUN useradd -m -s /bin/bash snapshot-gossip-client && \
 COPY --chown=snapshot-gossip-client:snapshot-gossip-client ${BINARY_PATH} /usr/local/sbin/snapshot-gossip-client
 COPY --chown=snapshot-gossip-client:snapshot-gossip-client README.md /usr/local/share/doc/snapshot-gossip-client/README.md
 
-# Set up the working directory
-WORKDIR /var/lib/snapshot-gossip-client
+# Make binary executable
+RUN chmod +x /usr/local/sbin/snapshot-gossip-client
 
 # Expose ports (documentation only)
 EXPOSE 8001/udp 8001/tcp 8899/tcp

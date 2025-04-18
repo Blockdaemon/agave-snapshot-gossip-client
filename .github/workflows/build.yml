@@ -10,6 +10,8 @@ on:
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - 'Dockerfile'
+      - '.dockerignore'
   push:
     branches:
       - main
@@ -20,6 +22,9 @@ on:
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - 'debian/**'
+      - 'Dockerfile'
+      - '.dockerignore'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
