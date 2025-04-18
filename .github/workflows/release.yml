@@ -45,3 +45,4 @@ jobs:
 
 permissions:
   contents: write  # This allows creating releases
+  packages: write  # This allows pushing to ghcr.io
