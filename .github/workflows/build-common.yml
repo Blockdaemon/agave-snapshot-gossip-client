@@ -60,10 +60,10 @@ jobs:
           export BUILD_TIMESTAMP=${{ steps.get_timestamp.outputs.timestamp }}
           export GIT_SHA=${{ steps.get_git_info.outputs.sha }}
           export GIT_TAG=${{ steps.get_git_info.outputs.tag }}
-          RUSTFLAGS="-C target-cpu=native" cargo build --release || {
+          RUSTFLAGS="-C target-cpu=x86-64" cargo build --release || {
             echo "Build failed, clearing cache and retrying..."
             cargo clean
-            RUSTFLAGS="-C target-cpu=native" cargo build --release
+            RUSTFLAGS="-C target-cpu=x86-64" cargo build --release
           }
           mkdir -p artifacts
           cp target/release/snapshot-gossip-client artifacts/
