@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use dns_lookup::lookup_host;
 use http::Uri;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use serde::Deserialize;
 
 // our local crates
@@ -100,12 +100,20 @@ impl Config {
             _ => return Err(ConfigError::InvalidAddress("Invalid address format".into())),
         };
 
+        debug!("Attempting DNS lookup for host: {}", host);
         let ip = lookup_host(host)
-            .map_err(|e| ConfigError::DnsLookupError(e.to_string()))?
+            .map_err(|e| {
+                error!("DNS lookup failed for host '{}': {}", host, e);
+                ConfigError::DnsLookupError(e.to_string())
+            })?
             .into_iter()
             .next()
-            .ok_or_else(|| ConfigError::DnsLookupError("No IP addresses found".into()))?;
+            .ok_or_else(|| {
+                error!("No IP addresses found for host '{}'", host);
+                ConfigError::DnsLookupError("No IP addresses found".into())
+            })?;
 
+        debug!("Successfully resolved host '{}' to IP: {}", host, ip);
         Ok(SocketAddr::new(ip, port))
     }
 
@@ -132,46 +140,70 @@ impl Config {
     pub async fn ip_echo(&self, entrypoints: &[SocketAddr]) -> Result<(IpAddr, u16), ConfigError> {
         let mut discovered_ip = None;
         let mut discovered_shred_version = None;
+        let mut last_error = None;
 
         // Try each entrypoint with IP echo client
         for entrypoint in entrypoints {
             let request = crate::ip_echo::IpEchoServerMessage::new(&[], &[]);
             info!("IP echo request to {}: {:?}", entrypoint, request);
-            if let Ok((ip, shred_version)) =
-                crate::ip_echo::ip_echo_client(*entrypoint, request).await
-            {
-                discovered_ip = Some(ip);
-                discovered_shred_version = Some(shred_version);
-                info!(
-                    "IP echo response from {}: {:?} {:?}",
-                    entrypoint, ip, shred_version
-                );
-                break;
+            match crate::ip_echo::ip_echo_client(*entrypoint, request).await {
+                Ok((ip, shred_version)) => {
+                    discovered_ip = Some(ip);
+                    discovered_shred_version = Some(shred_version);
+                    info!(
+                        "IP echo response from {}: {:?} {:?}",
+                        entrypoint, ip, shred_version
+                    );
+                    break;
+                }
+                Err(e) => {
+                    warn!("IP echo failed for {}: {}", entrypoint, e);
+                    last_error = Some(e);
+                    continue;
+                }
             }
         }
-        Ok((
-            discovered_ip.ok_or_else(|| {
-                ConfigError::IpEchoError("Failed to discover public IP through IP echo".into())
-            })?,
-            discovered_shred_version.ok_or_else(|| {
-                ConfigError::IpEchoError("Failed to discover shred version through IP echo".into())
-            })?,
-        ))
+
+        match (discovered_ip, discovered_shred_version) {
+            (Some(ip), Some(shred_version)) => Ok((ip, shred_version)),
+            _ => Err(ConfigError::IpEchoError(
+                last_error
+                    .map(|e| format!("All entrypoints failed, last error: {}", e))
+                    .unwrap_or_else(|| "Failed to discover public IP through IP echo".into()),
+            )),
+        }
     }
 
     pub async fn resolve(&self) -> Result<ResolvedConfig, ConfigError> {
         // Resolve entrypoints first since we need them for both IP echo and final config
-        let entrypoints = self
+        let mut resolved_entrypoints = Vec::new();
+        let entrypoint_strings = self
             .entrypoints
             .clone()
-            .unwrap_or_else(|| TESTNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect())
-            .into_iter()
-            .map(|addr| Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT))
-            .collect::<Result<Vec<_>, _>>()?;
+            .unwrap_or_else(|| TESTNET_ENTRYPOINTS.iter().map(|&s| s.to_string()).collect());
+
+        for addr in entrypoint_strings {
+            match Self::parse_addr(&addr, DEFAULT_GOSSIP_PORT) {
+                Ok(socket_addr) => {
+                    info!("Successfully resolved entrypoint: {}", addr);
+                    resolved_entrypoints.push(socket_addr);
+                }
+                Err(e) => {
+                    warn!("Failed to resolve entrypoint {}: {}", addr, e);
+                    continue;
+                }
+            }
+        }
+
+        if resolved_entrypoints.is_empty() {
+            return Err(ConfigError::DnsLookupError(
+                "No valid entrypoints could be resolved".into(),
+            ));
+        }
 
         let (public_ip, discovered_shred_version) = {
             // First try IP echo to get public ip and shred version at the same time
-            let ip_echo_result = self.ip_echo(&entrypoints).await;
+            let ip_echo_result = self.ip_echo(&resolved_entrypoints).await;
 
             // If public_ip is configured, use that regardless of IP echo result
             // If we get ip echo result and user configured a public ip, compare them
@@ -238,7 +270,7 @@ impl Config {
                 .keypair_path
                 .clone()
                 .unwrap_or_else(|| DEFAULT_KEYPAIR_PATH.to_string()),
-            entrypoints,
+            entrypoints: resolved_entrypoints,
             expected_genesis_hash: self.expected_genesis_hash.clone(),
             shred_version,
             listen_ip: self
