@@ -31,7 +31,13 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: |
+            linux-x86_64/*
+            *.deb
+            *.tar.gz
           path: artifacts
+          # Dangerous, make sure we don't have overlapping artifact names from upstream jobs
+          merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -39,6 +45,8 @@ jobs:
           files: |
             artifacts/linux-x86_64/snapshot-gossip-client
             artifacts/linux-x86_64/example-config.toml
+            artifacts/*.deb
+            artifacts/*.tar.gz
           generate_release_notes: true
           draft: false
           prerelease: false
