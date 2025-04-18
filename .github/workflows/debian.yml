@@ -61,9 +61,9 @@ jobs:
           mkdir -p artifacts
           mv ../*.deb artifacts/
 
-      - name: Upload Debian package
+      - name: Upload Debian package(s)
         uses: actions/upload-artifact@v4
         with:
-          name: agave-snapshot-gossip-client_${{ steps.changelog.outputs.PACKAGE_VERSION }}_amd64.deb
+          name: debian-packages
           path: artifacts/agave-snapshot-gossip-client_${{ steps.changelog.outputs.PACKAGE_VERSION }}_amd64.deb
-          retention-days: 5
+          if-no-files-found: error

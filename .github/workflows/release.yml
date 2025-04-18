@@ -14,7 +14,7 @@ jobs:
       verify_version: true
 
   docker:
-    needs: build
+    needs: build  # Needs build for the binary, but does not release artifacts
     uses: ./.github/workflows/docker.yml
 
   debian:
@@ -28,25 +28,50 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
+      # Downloads from linux-x86_64 specific build job (build-common.yml):
+      # - Individual files: snapshot-gossip-client, example-config.toml, README.md, INSTALL.md
+      # - tar.gz bundle: snapshot-gossip-client-linux-x86_64.tar.gz
+      # All these files are uploaded as a single artifact named 'linux-x86_64'
+      - name: List available artifacts
+        run: |
+          echo "Available artifacts:"
+          gh api repos/${{ github.repository }}/actions/artifacts | jq '.artifacts[] | .name'
+
+      # Download all artifacts from the build workflow
+      # Note: The linux-x86_64 artifact will be downloaded to artifacts/linux-x86_64/
+      # because it contains multiple files, while the debian-packages artifact
+      # will be downloaded directly to artifacts/ as it contains a single file
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: |
-            linux-x86_64/*
-            *.deb
-            *.tar.gz
+          pattern: linux-x86_64
           path: artifacts
-          # Dangerous, make sure we don't have overlapping artifact names from upstream jobs
-          merge-multiple: true
 
+      # Downloads from debian job (debian.yml):
+      # - Debian package: debian-package artifact
+      # Note: This will be downloaded directly to artifacts/ as it contains a single file
+      - name: Download Debian package(s)
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-packages
+          path: artifacts
+
+      - name: Debug artifacts directory
+        run: |
+          echo "Contents of artifacts directory:"
+          ls -la artifacts/
+          echo "Contents of artifacts/linux-x86_64 directory:"
+          ls -la artifacts/linux-x86_64/
+
+      # Creates release with:
+      # - All files from linux-x86_64 artifact (including tar.gz)
+      # - All Debian packages from debian-packages artifact
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/linux-x86_64/snapshot-gossip-client
-            artifacts/linux-x86_64/example-config.toml
-            artifacts/*.deb
-            artifacts/*.tar.gz
+            artifacts/linux-x86_64/**
+            artifacts/agave-snapshot-gossip-client_*.deb
           generate_release_notes: true
           draft: false
           prerelease: false

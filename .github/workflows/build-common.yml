@@ -33,16 +33,60 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Setup cargo cache
+      # Cache rust dependencies and build artifacts
+      # The cache key is constructed as: {prefix-key}-{key}-{auto-os}-{auto-arch}-{env-hash}-{lock-hash}
+      # - prefix-key: defaults to "v0-rust" if not set
+      # - key: user-provided key (e.g. "build")
+      # - auto-os: automatically detected OS (e.g. "Linux")
+      # - auto-arch: automatically detected architecture (e.g. "x64")
+      # - env-hash: hash of rust version and environment variables (e.g. "ef02d19b")
+      # - lock-hash: hash of Cargo.toml and Cargo.lock (e.g. "469be55e")
+      #
+      # Example key: v0-rust-build-Linux-x64-ef02d19b-469be55e
+      #
+      # If key is set, the key structure is:
+      # {prefix-key}-{key}-{auto-os}-{auto-arch}-{env-hash}-{lock-hash}
+      #
+      # If shared-key is set, the key structure is:
+      # {prefix-key}-{shared-key}-{auto-os}-{auto-arch}-{env-hash}-{lock-hash}
+      #
+      # Cache restoration:
+      # 1. First tries to restore with the exact key
+      # 2. If that fails, tries to restore with a key that starts with the restoreKey
+      # 3. The restoreKey is constructed as: {prefix-key}-{auto-os}
+      #    If shared-key is set, it is appended: {prefix-key}-{auto-os}-{shared-key}
+      #    WARNING: This is a bug - the restoreKey will never match any cache keys because
+      #    the shared-key is in the wrong position. Cache keys have shared-key before auto-os,
+      #    but restoreKey has it after auto-os.
+      #    See https://github.com/Swatinem/rust-cache/issues/239
+      #    Without shared-key, partial matching works correctly - the restoreKey will match
+      #    any cache key that starts with {prefix-key}-{auto-os}, regardless of the key,
+      #    architecture, environment hash, or lock hash.
+      # 4. If multiple matches are found, the most recent one is used
+      #
+      # The cache will be saved with the full key (e.g. "v0-rust-build-Linux-x64-ef02d19b-469be55e") when:
+      # - save-if condition is met (defaults to "success()")
+      # - or cache-on-failure is true
+      # The cache key will update when:
+      # - The rust version changes (affects env-hash)
+      # - The environment variables change (affects env-hash)
+      # - The Cargo.toml or Cargo.lock files change (affects lock-hash)
+      # - The OS changes (affects auto-os)
+      # - The architecture changes (affects auto-arch)
+      # - The cache is older than the TTL (default 7 days)
+      - name: Cache Rust dependencies
+        id: cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          workspaces: |
-            .
+          workspaces: .
           cache-targets: true
-          cache-on-failure: true
           cache-all-crates: true
-          prefix-key: rust-cache
+
+      - name: Debug cache hit
+        run: |
+          echo "Cache hit: ${{ steps.cache.outputs.cache-hit }}"
+          echo "CACHE_ON_FAILURE: $CACHE_ON_FAILURE"
+          echo "CARGO_INCREMENTAL: $CARGO_INCREMENTAL"
 
       - name: Get timestamp
         id: get_timestamp
@@ -75,13 +119,16 @@ jobs:
         run: |
           cargo test -- --nocapture
 
-      - name: Create tar.gz bundle
+      - name: Create tar.gz bundle in artifacts directory, using files already in artifacts directory
         if: ${{ inputs.upload_artifacts }}
         run: |
           cd artifacts
           tar czf snapshot-gossip-client-linux-x86_64.tar.gz snapshot-gossip-client example-config.toml README.md INSTALL.md
 
-      - name: Upload individual artifacts
+      # Upload all artifacts in the artifacts directory, including the tar.gz bundle
+      # Note: Using artifacts/* with a named artifact (linux-x86_64) will create a subdirectory
+      # named after the artifact when downloaded, resulting in artifacts/linux-x86_64/
+      - name: Upload all artifacts in the artifacts directory, including the tar.gz bundle
         if: ${{ inputs.upload_artifacts }}
         uses: actions/upload-artifact@v4
         with:
@@ -89,15 +136,8 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
-      - name: Upload tar.gz bundle
-        if: ${{ inputs.upload_artifacts }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshot-gossip-client-linux-x86_64
-          path: artifacts/snapshot-gossip-client-linux-x86_64.tar.gz
-          if-no-files-found: error
-
       - name: Verify version
         if: ${{ inputs.verify_version }}
         run: |
           ./target/release/snapshot-gossip-client --version
+
