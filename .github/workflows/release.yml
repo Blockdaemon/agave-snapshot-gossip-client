@@ -13,9 +13,17 @@ jobs:
       upload_artifacts: true
       verify_version: true
 
+  docker:
+    needs: build
+    uses: ./.github/workflows/docker.yml
+
+  debian:
+    needs: build
+    uses: ./.github/workflows/debian.yml
+
   release:
     name: Create Release
-    needs: build
+    needs: [docker, debian]
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
 

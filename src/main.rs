@@ -85,6 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     builder.init();
 
     info!("Starting up");
+    info!("Version: {}", env!("CARGO_PKG_VERSION"));
 
     let config = config::load_config(Some(&cli.config));
     let resolved = config.resolve().await.map_err(|e| {
