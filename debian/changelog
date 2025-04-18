@@ -1,3 +1,13 @@
+agave-snapshot-gossip-client (0.1.2) unstable; urgency=medium
+
+  * fix(#27): Fix debian changelog generation, adjust debian workflow, add better ignores to docker workflow, allow any cache to work, downgrade to ubuntu-22.04 so it matches docker
+  * fix(#34): skip entrypoints that fail DNS or ip_echo, move to the next
+  * fix(#27): rework CI to prevent 3 builds
+  * Remove all path checking, update dockerignore so we see artifacts in docker build, fix docker.yml binary path
+  * fix(#27): docker: permissions, dont need WORKDIR, rebuild on debian, docker changes, prepare-release fixes, fix changelog
+
+ -- Blockdaemon <support@blockdaemon.com>  Thu, 17 Apr 2025 19:26:38 -0700
+
 agave-snapshot-gossip-client (0.1.1) unstable; urgency=medium
 
   * Release 0.1.1
