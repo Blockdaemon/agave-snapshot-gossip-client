@@ -1,8 +1,15 @@
+agave-snapshot-gossip-client (0.1.4) unstable; urgency=medium
+
+  * fix(#36): add network "presets" for entrypoints and expected genesis hash
+  * Fix release: give write permissions
+
+ -- Nye Liu <nye@blockdaemon.com>  Thu, 17 Apr 2025 21:58:41 -0700
+
 agave-snapshot-gossip-client (0.1.3) unstable; urgency=medium
 
   * Cosmetic: add version on startup log, add docker and debian to release workflow
 
- -- Blockdaemon <support@blockdaemon.com>  Thu, 17 Apr 2025 20:48:39 -0700
+ -- Nye Liu <nye@blockdaemon.com>  Thu, 17 Apr 2025 20:48:39 -0700
 
 agave-snapshot-gossip-client (0.1.2) unstable; urgency=medium
 
@@ -12,16 +19,16 @@ agave-snapshot-gossip-client (0.1.2) unstable; urgency=medium
   * Remove all path checking, update dockerignore so we see artifacts in docker build, fix docker.yml binary path
   * fix(#27): docker: permissions, dont need WORKDIR, rebuild on debian, docker changes, prepare-release fixes, fix changelog
 
- -- Blockdaemon <support@blockdaemon.com>  Thu, 17 Apr 2025 19:26:38 -0700
+ -- Nye Liu <nye@blockdaemon.com>  Thu, 17 Apr 2025 19:26:38 -0700
 
 agave-snapshot-gossip-client (0.1.1) unstable; urgency=medium
 
   * Release 0.1.1
 
- -- Blockdaemon <support@blockdaemon.com>  Thu, 17 Apr 2025 00:10:55 -0700
+ -- Nye Liu <nye@blockdaemon.com>  Thu, 17 Apr 2025 00:10:55 -0700
 
 agave-snapshot-gossip-client (0.1.0) unstable; urgency=medium
 
   * Initial release.
 
- -- Blockdaemon <support@blockdaemon.com>  Wed, 16 Apr 2025 20:00:00 +0000
+ -- Nye Liu <nye@blockdaemon.com>  Wed, 16 Apr 2025 20:00:00 +0000

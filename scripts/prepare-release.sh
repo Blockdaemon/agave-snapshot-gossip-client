@@ -80,6 +80,10 @@ update_changelog() {
     # Get changes since last tag
     local changes=$(git log --reverse --pretty=format:"  * %s" ${last_tag}..HEAD)
 
+    # Get committer info from git config
+    local committer_name=$(git config user.name)
+    local committer_email=$(git config user.email)
+
     # Check if this version already exists in changelog
     if grep -q "agave-snapshot-gossip-client (${VERSION})" debian/changelog; then
         echo "Warning: Version ${VERSION} already exists in changelog. Skipping changelog update."
@@ -93,7 +97,7 @@ agave-snapshot-gossip-client (${VERSION}) unstable; urgency=medium
 
 ${changes}
 
- -- Blockdaemon <support@blockdaemon.com>  ${TIMESTAMP}
+ -- ${committer_name} <${committer_email}>  ${TIMESTAMP}
 
 EOF
     )
