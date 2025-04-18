@@ -8,5 +8,6 @@ keypair_path = "/etc/gossip-client/keypair.json"
 # Disable gossip until ready. The defaults ships this way to prevent joining the gossip network when newly installed.
 disable_gossip = true
 
-# You must configure this or nothing will work.
-storage_path = "http://localhost"
+# You must configure this or nothing will work, unless you intend to serve local files here
+#storage_path = "https://your.storage.server.com"
+storage_path = "/var/www"

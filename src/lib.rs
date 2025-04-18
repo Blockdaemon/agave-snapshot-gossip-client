@@ -4,6 +4,7 @@ pub mod gossip;
 pub mod healthcheck;
 pub mod http_proxy;
 pub mod ip_echo;
+pub mod local_storage;
 pub mod rpc;
 pub mod scraper;
 pub mod stun;

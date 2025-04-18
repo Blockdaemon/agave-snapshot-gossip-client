@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{ConnectInfo, State},
+    extract::{ConnectInfo, Path, State},
     http::{header, Method, Request, StatusCode, Uri},
     response::{IntoResponse, Response},
     Router,
@@ -19,6 +19,7 @@ use tokio::net::TcpListener;
 use crate::constants::SNAPSHOT_REGEX;
 use crate::healthcheck;
 use crate::http_proxy;
+use crate::local_storage;
 use crate::scraper::MetadataScraper;
 
 // Helper function to extract client IP from the request
@@ -68,6 +69,7 @@ pub struct AppState {
     num_peers: Arc<AtomicI64>,
     shred_version: Arc<AtomicU16>,
     enable_proxy: bool,
+    serve_local: bool,
 }
 
 pub struct RpcServer {
@@ -141,7 +143,17 @@ impl RpcServer {
 
         match state.scraper.build_uri(&uri).await {
             Ok(target_uri) => {
-                if state.enable_proxy {
+                if state.serve_local {
+                    info!("Serving local file for {}: {}", peer_ip, path);
+                    let local_path = state.scraper.storage_path().unwrap().path().to_string();
+                    // Use the local_storage module to serve the file
+                    local_storage::LocalStorage::handle_request(
+                        State(local_storage::LocalStorage::new(local_path)),
+                        Path(path),
+                    )
+                    .await
+                    .into_response()
+                } else if state.enable_proxy {
                     info!(
                         "Proxying snapshot request for {} to {}",
                         peer_ip, target_uri
@@ -262,6 +274,11 @@ impl RpcServer {
             num_peers: self.num_peers.clone(),
             shred_version: self.shred_version.clone(),
             enable_proxy: self.enable_proxy,
+            serve_local: self
+                .scraper
+                .storage_path()
+                .map(|uri| uri.scheme_str() == Some("file"))
+                .unwrap_or(false),
         };
 
         // Create our application router with routes

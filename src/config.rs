@@ -287,12 +287,48 @@ impl Config {
             (_, configured) => configured,
         };
 
-        let storage_path = match self.storage_path.as_deref() {
-            None => None,
-            Some(s) => Some(Uri::from_str(s).map_err(|e| {
-                ConfigError::ParseError(format!("Invalid storage path URL: {}", e))
-            })?),
-        };
+        let storage_path = Some(
+            self.storage_path
+                .as_deref()
+                .map(|s| {
+                    // Try to parse as URI first to check if it has a valid scheme
+                    if let Ok(uri) = Uri::from_str(s) {
+                        if uri.scheme_str().is_some() {
+                            // If it's already a valid URI with a scheme, use it as-is
+                            return s.to_string();
+                        }
+                    }
+
+                    if s.starts_with('/') {
+                        // If it's an absolute path, convert to file URI
+                        format!("file://localhost{}", s)
+                    } else {
+                        // If it's a relative path, join with current dir and convert to file URI
+                        let path = std::env::current_dir()
+                            .unwrap()
+                            .join(s)
+                            .to_string_lossy()
+                            .to_string();
+                        format!("file://localhost{}", path)
+                    }
+                })
+                .unwrap_or_else(|| {
+                    // Default to "storage" in current directory
+                    let path = std::env::current_dir()
+                        .unwrap()
+                        .join("storage")
+                        .to_string_lossy()
+                        .to_string();
+                    format!("file://localhost{}", path)
+                }),
+        );
+        let storage_path = storage_path
+            .map(|s| {
+                Uri::from_str(&s).map_err(|e| {
+                    ConfigError::ParseError(format!("Invalid storage path URL: {}", e))
+                })
+            })
+            .transpose()?;
 
         // Use the network's default genesis hash if none is specified
         let expected_genesis_hash = self.expected_genesis_hash.clone().or(default_genesis_hash);
@@ -355,5 +391,148 @@ pub fn load_config(config_path: Option<&str>) -> Config {
             }
         }
         Err(e) => panic!("Error reading {}: {}", path, e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use tempfile::tempdir;
+
+    fn make_test_config(storage_path: Option<String>) -> Config {
+        Config {
+            keypair_path: None,
+            network: None,
+            entrypoints: None,
+            expected_genesis_hash: None,
+            shred_version: None,
+            listen_ip: None,
+            public_ip: None,
+            enable_stun: None,
+            stun_server: None,
+            disable_gossip: None,
+            gossip_port: None,
+            rpc_port: None,
+            enable_upnp: None,
+            storage_path,
+            enable_proxy: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_storage_path_resolution() {
+        let temp_dir = tempdir().unwrap();
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(temp_dir.path()).unwrap();
+
+        // Create the storage directory first
+        let storage_dir = temp_dir.path().join("storage");
+        std::fs::create_dir_all(&storage_dir).unwrap();
+        let canonical_storage_path = storage_dir
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
+        // Helper function to test a storage path
+        let test_path =
+            async move |input: Option<String>, expected_uri: &str, expected_path: &str| {
+                let config = make_test_config(input);
+                let resolved = config.resolve().await.unwrap();
+                let uri = resolved.storage_path.unwrap();
+                assert_eq!(uri.to_string(), expected_uri);
+                assert_eq!(uri.path(), expected_path);
+            };
+
+        // Test absolute paths
+        test_path(
+            Some("/tmp/testpath/storage".to_string()),
+            "file://localhost/tmp/testpath/storage",
+            "/tmp/testpath/storage",
+        )
+        .await;
+
+        test_path(
+            Some("/tmp/test.path/storage".to_string()),
+            "file://localhost/tmp/test.path/storage",
+            "/tmp/test.path/storage",
+        )
+        .await;
+
+        test_path(
+            Some("/absolute/storage".to_string()),
+            "file://localhost/absolute/storage",
+            "/absolute/storage",
+        )
+        .await;
+
+        // Test relative and default paths
+        test_path(
+            Some("storage".to_string()),
+            &format!("file://localhost{}", canonical_storage_path),
+            &canonical_storage_path,
+        )
+        .await;
+
+        test_path(
+            None,
+            &format!("file://localhost{}", canonical_storage_path),
+            &canonical_storage_path,
+        )
+        .await;
+
+        // Test URL paths with various schemes
+        test_path(
+            Some("https://example.com".to_string()),
+            "https://example.com/",
+            "/",
+        )
+        .await;
+
+        test_path(
+            Some("http://example.com/storage".to_string()),
+            "http://example.com/storage",
+            "/storage",
+        )
+        .await;
+
+        // Test other common schemes
+        test_path(
+            Some("ftp://example.com/files".to_string()),
+            "ftp://example.com/files",
+            "/files",
+        )
+        .await;
+
+        test_path(
+            Some("s3://bucket/path".to_string()),
+            "s3://bucket/path",
+            "/path",
+        )
+        .await;
+
+        // Test domain-only URLs with trailing slash
+        test_path(
+            Some("https://example.com".to_string()),
+            "https://example.com/",
+            "/",
+        )
+        .await;
+
+        test_path(Some("s3://bucket".to_string()), "s3://bucket/", "/").await;
+
+        // Verify scheme handling
+        let config = make_test_config(Some("https://example.com".to_string()));
+        let resolved = config.resolve().await.unwrap();
+        let uri = resolved.storage_path.unwrap();
+        assert_eq!(uri.scheme_str(), Some("https"));
+
+        let config = make_test_config(Some("/local/path".to_string()));
+        let resolved = config.resolve().await.unwrap();
+        let uri = resolved.storage_path.unwrap();
+        assert_eq!(uri.scheme_str(), Some("file"));
+
+        env::set_current_dir(original_dir).unwrap();
     }
 }

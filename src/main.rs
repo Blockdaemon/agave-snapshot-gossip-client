@@ -4,6 +4,7 @@ mod gossip;
 mod healthcheck;
 mod http_proxy;
 mod ip_echo;
+mod local_storage;
 mod rpc;
 mod scraper;
 mod stun;

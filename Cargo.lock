@@ -144,7 +144,9 @@ dependencies = [
  "solana-streamer",
  "solana-version",
  "stun-client",
+ "tempfile",
  "tokio",
+ "tokio-util",
  "toml 0.8.20",
  "wiremock",
 ]

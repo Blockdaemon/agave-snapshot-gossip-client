@@ -22,13 +22,14 @@ solana-sdk = "~2"
 solana-streamer = "~2"
 solana-version = "~2"
 
-# for rpc.rs and http_proxy.rs
+# for rpc.rs, http_proxy.rs, and local_storage.rs
 bytes = "~1"
 axum = { version = "*", features = ["json"] }
+http = "~1"
+reqwest = { version = "*", features = ["json", "rustls-tls"] }
 serde = { version = "~1", features = ["derive"] }
 serde_json = "*"
-reqwest = { version = "*", features = ["json", "rustls-tls"] }
-http = "~1"
+tokio-util = "*"
 
 # Everything else
 anyhow = "~1"
@@ -64,6 +65,7 @@ snapshot_gossip_client = { path = ".", package = "agave-snapshot-gossip-client" 
 axum-test = "*"
 bs58 = "*"
 hyper = "~1"
+tempfile = "~3"
 wiremock = "*"
 
 [profile.release]
