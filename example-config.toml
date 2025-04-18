@@ -1,8 +1,4 @@
-#
 # Example config.toml
-# All settings are optional except `storage_path`.
-# `shred_version` is recommended but not strictly required.
-#
 
 # Optional: Network to connect to (devnet, testnet, or mainnet)
 # If not specified, will use testnet

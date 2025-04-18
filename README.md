@@ -63,7 +63,7 @@ The system supports three deployment models:
 
 2. Create a `config.toml` file (optional, see [example-config.toml](example-config.toml))
 
-- The only **required** setting is the `storage_path` to the snapshot location.
+- The only **required** setting is the `storage_path` to the snapshot location. The default is `storage` in the current working directory (`/var/www` in Debian packages), and not a remote host.
 - To use a different network, simply set the `network` field to "devnet", "testnet", or "mainnet". The correct entrypoints and expected genesis hash will be automatically configured.
 - For advanced users, you can still manually configure `entrypoints` and `expected_genesis_hash` if needed.
 
@@ -86,22 +86,22 @@ See the [Installation Guide](INSTALL.md) file for more information on installing
 
 Use `--config <path>` to specify a custom config file location. Default is `config.toml` in the current working directory.
 
-| Option                  | Default                  | Description                       |
+| Option                  | Default/Debian default   | Description                       |
 |-------------------------|--------------------------|-----------------------------------|
-| `network`               | Testnet                  | "devnet", "testnet", or "mainnet" |
+| `network`               | `testnet`                | "devnet", "testnet", or "mainnet" |
 | `entrypoints`           | Follow `network`         | Gossip entrypoint override        |
-| `expected_genesis_hash` | None/Auto                | Expected genesis hash override    |
+| `expected_genesis_hash` | Follow `network`         | Expected genesis hash override    |
 | `shred_version`         | None                     | Expected shred version override   |
 | `keypair_path`          | `keypair.json`           | Path to keypair file              |
 | `listen_ip`             | `0.0.0.0`                | Local bind/listen IP              |
 | `public_ip`             | Auto (STUN)              | Public IP address                 |
 | `enable_stun`           | `false`                  | Use STUN to discover public IP instead of `ip_echo` |
 | `stun_server`           | `stun.l.google.com:3478` | STUN server address               |
-| `disable_gossip`        | `false`                  | Disable gossip client             |
+| `disable_gossip`        | `false`/`true`           | Disable gossip client             |
 | `gossip_port`           | `8001`                   | Gossip listen port                |
 | `rpc_port`              | `8899`                   | RPC listen port                   |
 | `enable_upnp`           | `false`                  | Enable UPnP port forwarding       |
-| `storage_path`          | None                     | Redirect/proxy target URL         |
+| `storage_path`          | `storage`/`/var/www`     | Redirect/proxy target dir or URL  |
 | `enable_proxy`          | `false`                  | Reverse proxy GET requests instead of redirecting |
 
 `shred_version` is used when joining the gossip network. If you have issues

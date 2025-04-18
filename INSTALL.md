@@ -14,7 +14,7 @@ Install the package:
 sudo dpkg -i agave-snapshot-gossip-client_#####_amd64.deb
 ```
 
-Edit the config file - you must configure `storage_path` and comment out `disable_gossip` when ready to join the network!
+Edit the config file - you must configure `storage_path` and comment out `disable_gossip` when ready to join the network! By default, `storage_path` is `/var/www`, which is local storage.
 ```bash
 sudo nano /etc/gossip-client/config.toml
 ```
