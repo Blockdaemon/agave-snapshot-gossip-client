@@ -1,3 +1,10 @@
+agave-snapshot-gossip-client (0.1.5) unstable; urgency=medium
+
+  * fix(#17): Actually release deb and tar.gz files
+  * fix(#16): add local storage support, and make it so user doesn't have to specify storage at all.
+
+ -- Nye Liu <nye@blockdaemon.com>  Fri, 18 Apr 2025 01:34:16 -0700
+
 agave-snapshot-gossip-client (0.1.4) unstable; urgency=medium
 
   * fix(#36): add network "presets" for entrypoints and expected genesis hash
