@@ -10,6 +10,8 @@ pub const DEFAULT_LISTEN_IP: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 pub const DEFAULT_RPC_PORT: u16 = 8899;
 pub const DEFAULT_STUN_SERVER: &str = "stun.l.google.com";
 pub const DEFAULT_STUN_PORT: u16 = 3478;
+pub const DEFAULT_LOG_FILTERS: &str =
+    "h2=off,hyper_util=off,solana_metrics=off,solana_gossip::cluster_info=off,info";
 
 pub const DEVNET_ENTRYPOINTS: &[&str] = &[
     "entrypoint.devnet.solana.com:8001",
