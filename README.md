@@ -25,7 +25,7 @@ This project, along with [agave-snapshot-uploader](https://github.com/Blockdaemo
 - Gossip network integration for discovery
 - Can be used as an entrypoint for the gossip network
 - Minimum required JSONRPC endpoint compatibility for snapshot distribution (`getSlot`, `getVersion`, `getGenesisHash`)
-- Additional non-standard JSONRPC methods (`getNumPeers`, `getShredVersion`)
+- Additional non-standard JSONRPC methods (`getNumPeers`, `getShredVersion`, `getPublicKey`)
 - Native Agave support for `ip_echo` public IP and shred version discovery (client and server)
 - Health endpoint on http://localhost:8899/health
 - STUN support for public IP detection

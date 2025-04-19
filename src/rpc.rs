@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use tokio::net::TcpListener;
 
 // Our local crates
+use crate::atomic_state::AtomicState;
 use crate::constants::SNAPSHOT_REGEX;
 use crate::healthcheck;
 use crate::http_proxy;
@@ -66,30 +67,26 @@ fn jsonrpc_error(code: i32, message: &str, id: Option<Value>, status_code: Statu
 #[derive(Clone)]
 pub struct AppState {
     scraper: Arc<MetadataScraper>,
-    num_peers: Arc<AtomicI64>,
-    shred_version: Arc<AtomicU16>,
+    atomic_state: AtomicState,
     enable_proxy: bool,
     serve_local: bool,
 }
 
 pub struct RpcServer {
     scraper: Arc<MetadataScraper>,
-    num_peers: Arc<AtomicI64>,
-    shred_version: Arc<AtomicU16>,
+    atomic_state: AtomicState,
     enable_proxy: bool,
 }
 
 impl RpcServer {
     pub fn new(
         scraper: Arc<MetadataScraper>,
-        num_peers: Arc<AtomicI64>,
-        shred_version: Arc<AtomicU16>,
+        atomic_state: AtomicState,
         enable_proxy: bool,
     ) -> Self {
         Self {
             scraper,
-            num_peers,
-            shred_version,
+            atomic_state,
             enable_proxy,
         }
     }
@@ -233,20 +230,13 @@ impl RpcServer {
 
         // Handle different RPC methods
         let result = match method {
+            // standard solana methods
             "getVersion" => {
                 let info = state.scraper.get_cached_snapshot_info().await;
                 json!(RpcVersionInfo {
                     solana_core: info.solana_version,
                     feature_set: info.solana_feature_set,
                 })
-            }
-            "getNumPeers" => {
-                json!(state.num_peers.load(std::sync::atomic::Ordering::Relaxed))
-            }
-            "getShredVersion" => {
-                json!(state
-                    .shred_version
-                    .load(std::sync::atomic::Ordering::Relaxed))
             }
             "getGenesisHash" => {
                 let state = state.scraper.get_cached_snapshot_info().await;
@@ -255,6 +245,16 @@ impl RpcServer {
             "getSlot" => {
                 let state = state.scraper.get_cached_snapshot_info().await;
                 json!(state.slot)
+            }
+            // our own non-standard methods
+            "getNumPeers" => {
+                json!(state.atomic_state.get_num_peers())
+            }
+            "getShredVersion" => {
+                json!(state.atomic_state.get_shred_version())
+            }
+            "getPublicKey" => {
+                json!(state.atomic_state.get_pubkey())
             }
             _ => {
                 return jsonrpc_error(-32601, "Method not found", id, StatusCode::BAD_REQUEST);
@@ -269,10 +269,9 @@ impl RpcServer {
         info!("Starting RPC server on {}", addr);
 
         // Create the application state
-        let state = AppState {
+        let app_state = AppState {
             scraper: self.scraper.clone(),
-            num_peers: self.num_peers.clone(),
-            shred_version: self.shred_version.clone(),
+            atomic_state: self.atomic_state.clone(),
             enable_proxy: self.enable_proxy,
             serve_local: self
                 .scraper
@@ -300,7 +299,7 @@ impl RpcServer {
                     .body(Body::from("Method Not Allowed\n"))
                     .unwrap()
             })
-            .with_state(state);
+            .with_state(app_state);
 
         // Add health check route
         let app = healthcheck::add_health_check_route(app);

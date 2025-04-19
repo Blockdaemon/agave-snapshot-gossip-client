@@ -2,7 +2,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -13,12 +13,12 @@ use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
 use solana_streamer::socket::SocketAddrSpace;
-use tokio;
 
 // Our local crates
 use super::config::ResolvedConfig;
 use super::ip_echo;
 use super::scraper::{MetadataScraper, SnapshotHashes};
+use crate::atomic_state::AtomicState;
 
 // Constants
 use crate::constants::DEFAULT_GOSSIP_CRDS_TTL_SECS;
@@ -102,9 +102,8 @@ trait GossipMonitor {
     fn monitor_gossip(
         &self,
         scraper: Arc<MetadataScraper>,
+        atomic_state: AtomicState,
         exit: Arc<AtomicBool>,
-        num_peers: Arc<AtomicI64>,
-        shred_version: Arc<AtomicU16>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
@@ -131,16 +130,15 @@ impl GossipMonitor for Arc<ClusterInfo> {
     fn monitor_gossip(
         &self,
         scraper: Arc<MetadataScraper>,
+        atomic_state: AtomicState,
         exit: Arc<AtomicBool>,
-        num_peers: Arc<AtomicI64>,
-        shred_version: Arc<AtomicU16>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
             warn!("Connecting to gossip...");
             let start = Instant::now();
             let mut state = GossipMonitorState::new();
 
-            while !exit.load(std::sync::atomic::Ordering::Relaxed) {
+            while !exit.load(Ordering::Relaxed) {
                 let peer_count = self.all_peers().len();
                 if peer_count < MIN_PEERS {
                     if state.connected {
@@ -164,7 +162,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
                             "Got shred version {} -> {}",
                             state.last_shred_version, shred_ver
                         );
-                        shred_version.store(shred_ver, std::sync::atomic::Ordering::SeqCst);
+                        atomic_state.set_shred_version(shred_ver);
                         state.last_shred_version = shred_ver;
                     }
 
@@ -180,10 +178,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
                         peer_count,
                         start.elapsed().as_secs()
                     );
-                    num_peers.store(
-                        peer_count.try_into().unwrap(),
-                        std::sync::atomic::Ordering::SeqCst,
-                    );
+                    atomic_state.set_num_peers(peer_count.try_into().unwrap());
                     state.last_peer_count = peer_count;
                 }
 
@@ -313,9 +308,8 @@ fn make_gossip_node(
 pub async fn start_gossip_client(
     resolved: &ResolvedConfig,
     scraper: Arc<MetadataScraper>,
+    atomic_state: AtomicState,
     exit: Arc<AtomicBool>,
-    num_peers: Arc<AtomicI64>,
-    shred_version: Arc<AtomicU16>,
 ) -> Result<(tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)> {
     let node_keypair = match read_keypair_file(&resolved.keypair_path) {
         Ok(keypair) => keypair,
@@ -337,6 +331,7 @@ pub async fn start_gossip_client(
         }
     };
     info!("Our pubkey: {}", node_keypair.pubkey());
+    atomic_state.set_pubkey(node_keypair.pubkey().to_string());
 
     // Start gossip service
     let gossip_addr = &SocketAddr::new(resolved.public_ip, resolved.gossip_port); // public_ip advertised, port portion is used with hard coded UNSPECIFIED listen IP
@@ -361,12 +356,11 @@ pub async fn start_gossip_client(
     let monitor_handle = tokio::spawn({
         let cluster_info = cluster_info.clone();
         let scraper = scraper.clone();
-        let exit = exit.clone();
-        let num_peers = num_peers.clone();
-        let shred_version = shred_version.clone();
+        let atomic_state_clone = atomic_state.clone(); // Clone for the closure
+        let exit_clone = exit.clone(); // Clone exit for the closure
         async move {
             cluster_info
-                .monitor_gossip(scraper, exit, num_peers, shred_version)
+                .monitor_gossip(scraper, atomic_state_clone, exit_clone)
                 .await;
         }
     });
