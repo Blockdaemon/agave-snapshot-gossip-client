@@ -1,8 +1,6 @@
 #!/bin/sh
 # preinst script for agave-snapshot-gossip-client
 
-set -e
-
 case "$1" in
     install|upgrade)
         # Create gossip-client group if it doesn't exist
@@ -18,14 +16,14 @@ case "$1" in
 
     remove|deconfigure)
         # Clean up when package is removed
-        systemctl stop gossip-client.service || true
-        systemctl disable gossip-client.service || true
+        systemctl stop gossip-client.service
+        systemctl disable gossip-client.service
         ;;
 
     abort-install|abort-upgrade|abort-remove|abort-deconfigure)
         # Clean up if installation fails
-        systemctl stop gossip-client.service || true
-        systemctl disable gossip-client.service || true
+        systemctl stop gossip-client.service
+        systemctl disable gossip-client.service
         ;;
 esac
 

@@ -1,8 +1,6 @@
 #!/bin/sh
 # postinst script for agave-snapshot-gossip-client
 
-set -e
-
 case "$1" in
     configure)
         # Install default config if it doesn't exist
