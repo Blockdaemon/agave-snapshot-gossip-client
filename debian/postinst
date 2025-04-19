@@ -10,8 +10,7 @@ case "$1" in
             cp /usr/share/doc/agave-snapshot-gossip-client/examples/config.toml /etc/gossip-client/config.toml
         fi
 
-        # Set ownership and permissions
-        chown -R gossip-client:gossip-client /etc/gossip-client
+        # Set permissions
         chmod 755 /etc/gossip-client
         chmod 644 /etc/gossip-client/config.toml
 
@@ -21,15 +20,15 @@ case "$1" in
         ;;
 
     remove|deconfigure)
-        # Clean up when package is removed
-        systemctl stop gossip-client.service || true
-        systemctl disable gossip-client.service || true
+        # Stop the service
+        systemctl stop gossip-client.service
+        systemctl disable gossip-client.service
         ;;
 
     abort-install|abort-upgrade|abort-remove|abort-deconfigure)
         # Clean up if installation fails
-        systemctl stop gossip-client.service || true
-        systemctl disable gossip-client.service || true
+        systemctl stop gossip-client.service
+        systemctl disable gossip-client.service
         ;;
 esac
 

@@ -317,13 +317,25 @@ pub async fn start_gossip_client(
     num_peers: Arc<AtomicI64>,
     shred_version: Arc<AtomicU16>,
 ) -> Result<(tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)> {
-    let node_keypair = read_keypair_file(&resolved.keypair_path).unwrap_or_else(|err| {
-        warn!(
-            "{} not found, generating new keypair: {}",
-            resolved.keypair_path, err
-        );
-        Keypair::new()
-    });
+    let node_keypair = match read_keypair_file(&resolved.keypair_path) {
+        Ok(keypair) => keypair,
+        Err(err) => {
+            if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+                if io_err.kind() == std::io::ErrorKind::PermissionDenied {
+                    error!(
+                        "Permission denied when reading keypair file {}: {}",
+                        resolved.keypair_path, err
+                    );
+                    std::process::exit(1);
+                }
+            }
+            warn!(
+                "Failed to read keypair file {}: {}",
+                resolved.keypair_path, err
+            );
+            Keypair::new()
+        }
+    };
     info!("Our pubkey: {}", node_keypair.pubkey());
 
     // Start gossip service
@@ -370,6 +382,9 @@ pub async fn start_gossip_client(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::tempdir;
 
     #[test]
     fn test_hash_decoding() {
@@ -399,5 +414,59 @@ mod tests {
         let result = decode_hash!(invalid_hash_str);
         let err_msg = result.unwrap_err().to_string();
         assert_eq!(err_msg, "failed to decoded string to hash");
+    }
+
+    #[test]
+    fn test_keypair_file_permissions() {
+        // Create a temporary directory
+        let temp_dir = tempdir().unwrap();
+        let keypair_path = temp_dir.path().join("keypair.json");
+
+        // Create a keypair file in the correct format (array of bytes)
+        let keypair = Keypair::new();
+        let bytes = keypair.to_bytes();
+        let json_bytes: Vec<_> = bytes.iter().map(|&b| b as i32).collect();
+        fs::write(&keypair_path, serde_json::to_string(&json_bytes).unwrap()).unwrap();
+
+        // First test: verify we can read the file with normal permissions
+        let result = read_keypair_file(&keypair_path);
+        assert!(
+            result.is_ok(),
+            "Should be able to read keypair file with normal permissions"
+        );
+
+        // Second test: set restrictive permissions and verify EPERM
+        let mut perms = fs::metadata(&keypair_path).unwrap().permissions();
+        perms.set_mode(0o000); // ---------
+        fs::set_permissions(&keypair_path, perms).unwrap();
+
+        let result = read_keypair_file(&keypair_path);
+        assert!(
+            result.is_err(),
+            "Should fail to read keypair file with no permissions"
+        );
+        let err = result.unwrap_err();
+        let io_err = err
+            .downcast_ref::<std::io::Error>()
+            .expect("Should be an io::Error");
+        assert_eq!(
+            io_err.kind(),
+            std::io::ErrorKind::PermissionDenied,
+            "Should be a permission denied error"
+        );
+
+        // Third test: verify non-existent file case
+        let non_existent_path = temp_dir.path().join("nonexistent.json");
+        let result = read_keypair_file(&non_existent_path);
+        assert!(result.is_err(), "Should fail to read non-existent file");
+        let err = result.unwrap_err();
+        let io_err = err
+            .downcast_ref::<std::io::Error>()
+            .expect("Should be an io::Error");
+        assert_eq!(
+            io_err.kind(),
+            std::io::ErrorKind::NotFound,
+            "Should be a not found error"
+        );
     }
 }

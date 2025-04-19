@@ -1,6 +1,5 @@
 #!/bin/sh
-
-set -e
+# postrm script for agave-snapshot-gossip-client
 
 case "$1" in
     purge)
