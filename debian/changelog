@@ -1,3 +1,16 @@
+agave-snapshot-gossip-client (0.1.7) unstable; urgency=medium
+
+  * fix(#39): Add sane RUST_LOG defaults to main.rs
+  * Merge pull request #42 from Blockdaemon/fix-39-add-sane-logging-defaults
+  * fix(#37): Simplify json file preservation in postrm
+  * fix(#43): Scraper should handle file:// schema and actual incremental filename format better
+  * fix(#41): fail if keypair is unreadable, don't continue, leave perms of /etc/gossip-client intact
+  * fix(#40): add getPublicKey, refactor Atomics
+  * Merge pull request #44 from Blockdaemon/fix-40-report-pubkey
+  * Remove more set -e's from debian helpers
+
+ -- Nye Liu <nye@blockdaemon.com>  Sat, 19 Apr 2025 00:43:43 -0700
+
 agave-snapshot-gossip-client (0.1.6) unstable; urgency=medium
 
   * Cosmetic documentation updates
