@@ -23,7 +23,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [docker, debian]
+    needs: debian # docker is not needed for release
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
 
