@@ -1,3 +1,12 @@
+agave-snapshot-gossip-client (0.1.6) unstable; urgency=medium
+
+  * Cosmetic documentation updates
+  * Don't use RUSTC 'target-cpu=native' flag - we're building in some VM, who knows what the target is
+  * fix(#38): Fix Release action, make a shared key that is very non-specific to speed up builds.
+  * fix(#17): debian pkg: create /etc/gossip-client
+
+ -- Nye Liu <nye@blockdaemon.com>  Fri, 18 Apr 2025 18:35:59 -0700
+
 agave-snapshot-gossip-client (0.1.5) unstable; urgency=medium
 
   * fix(#17): Actually release deb and tar.gz files
