@@ -136,7 +136,7 @@ impl RpcServer {
             Ok(uri) => uri,
             Err(e) => {
                 error!("Failed to build URI for {}: {}", peer_ip, e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error\n")
                     .into_response();
             }
         };
@@ -177,7 +177,7 @@ impl RpcServer {
             }
             Err(e) => {
                 error!("Failed to build URI for {}: {}", peer_ip, e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Failed to build URI").into_response()
+                (StatusCode::INTERNAL_SERVER_ERROR, "Failed to build URI\n").into_response()
             }
         }
     }
@@ -195,7 +195,7 @@ impl RpcServer {
 
         // Only handle POST requests for JSON-RPC
         if req.method() != Method::POST {
-            return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed").into_response();
+            return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed\n").into_response();
         }
 
         let peer_ip = get_client_ip(&req);
@@ -205,7 +205,7 @@ impl RpcServer {
             Ok(bytes) => bytes,
             Err(e) => {
                 error!("Failed to read request body: {}", e);
-                return (StatusCode::BAD_REQUEST, "Bad request").into_response();
+                return (StatusCode::BAD_REQUEST, "Bad request\n").into_response();
             }
         };
 
@@ -214,7 +214,7 @@ impl RpcServer {
             Ok(val) => val,
             Err(e) => {
                 error!("Failed to parse JSON-RPC request: {}", e);
-                return (StatusCode::BAD_REQUEST, "Invalid JSON").into_response();
+                return (StatusCode::BAD_REQUEST, "Invalid JSON\n").into_response();
             }
         };
 

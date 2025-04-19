@@ -74,37 +74,14 @@ pub struct SnapshotInfo {
 
 impl SnapshotInfo {
     fn extract_hash_from_url(url: &str) -> Result<String, ScraperError> {
-        if url.is_empty() {
-            return Err(ScraperError::ParseError(
-                "Empty snapshot URL provided".to_string(),
-            ));
-        }
-
-        // Check URL format
         let url = url
             .strip_prefix("https://")
             .ok_or_else(|| ScraperError::ParseError(format!("Invalid URL format: {}", url)))?;
 
-        // Find the last hyphen to get the hash
-        let last_hyphen = url
-            .rfind('-')
-            .ok_or_else(|| ScraperError::ParseError(format!("No hyphen found in URL: {}", url)))?;
-
-        // Check if there's another hyphen before the last one (we need at least two hyphens)
-        if url[..last_hyphen].rfind('-').is_none() {
-            return Err(ScraperError::ParseError(format!(
-                "URL must contain at least two hyphens: {}",
-                url
-            )));
-        }
-
-        // Extract the hash (everything between the last hyphen and the first dot after it)
-        let first_dot = url[last_hyphen + 1..].find('.').ok_or_else(|| {
-            ScraperError::ParseError(format!("No file extension found in URL: {}", url))
-        })?;
-
-        let hash_str = &url[last_hyphen + 1..last_hyphen + 1 + first_dot];
-        Ok(hash_str.to_string())
+        url.rsplit_once('-')
+            .and_then(|(_, hash_part)| hash_part.split_once('.'))
+            .map(|(hash, _)| hash.to_string())
+            .ok_or_else(|| ScraperError::ParseError(format!("No hash found in URL: {}", url)))
     }
 
     pub fn get_snapshot_hashes(&self) -> Result<SnapshotHashes, ScraperError> {
@@ -234,18 +211,58 @@ impl MetadataScraper {
             DEFAULT_SNAPSHOT_INFO_PATH,
         )?;
         debug!("Fetching snapshot info from {}", url);
-        let response = self.http_client.get(&url).send().await.map_err(|e| {
-            ScraperError::NetworkError(format!(
-                "Failed to fetch snapshot info from {}: {} (source: {:?})",
-                url,
-                e,
-                e.source()
-            ))
+
+        let uri = Uri::from_str(&url).map_err(|e| {
+            ScraperError::NetworkError(format!("Failed to parse URI {}: {}", url, e))
         })?;
 
-        let body = response.text().await.map_err(|e| {
-            ScraperError::NetworkError(format!("Failed to read response body {}: {}", url, e))
-        })?;
+        let body = match uri.scheme_str() {
+            Some("file") => {
+                // For file:// URLs, use tokio::fs to read the file
+                let path = uri.path();
+                tokio::fs::read_to_string(path).await.map_err(|e| {
+                    ScraperError::NetworkError(format!("Failed to read file {}: {}", url, e))
+                })?
+            }
+            Some("http") | Some("https") => {
+                // For http(s):// URLs, use reqwest as before
+                let response = self.http_client.get(&url).send().await.map_err(|e| {
+                    ScraperError::NetworkError(format!(
+                        "Failed to fetch snapshot info from {}: {} (source: {:?})\n",
+                        url,
+                        e,
+                        e.source()
+                    ))
+                })?;
+
+                if !response.status().is_success() {
+                    return Err(ScraperError::NetworkError(format!(
+                        "HTTP error {}: {}\n",
+                        response.status(),
+                        response.text().await.unwrap_or_default()
+                    )));
+                }
+
+                response.text().await.map_err(|e| {
+                    ScraperError::NetworkError(format!(
+                        "Failed to read response body {}: {}\n",
+                        url, e
+                    ))
+                })?
+            }
+            Some(scheme) => {
+                return Err(ScraperError::NetworkError(format!(
+                    "Unsupported URI scheme: {}",
+                    scheme
+                )));
+            }
+            None => {
+                return Err(ScraperError::NetworkError(format!(
+                    "Missing URI scheme in: {}",
+                    url
+                )));
+            }
+        };
 
         let info: SnapshotInfo = serde_json::from_str(&body).map_err(|e| {
             ScraperError::ParseError(format!(
@@ -439,6 +456,25 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_hash_from_url() {
+        // Test full snapshot URL
+        let full_url = "https://example.com/snapshot-1234567890-abc123def456.tar.zst";
+        let hash = SnapshotInfo::extract_hash_from_url(full_url).unwrap();
+        assert_eq!(hash, "abc123def456");
+
+        // Test incremental snapshot URL
+        let inc_url =
+            "https://example.com/incremental-snapshot-1234567890-2345678901-xyz789uvw012.tar.zst";
+        let hash = SnapshotInfo::extract_hash_from_url(inc_url).unwrap();
+        assert_eq!(hash, "xyz789uvw012");
+
+        // Test invalid URLs
+        assert!(SnapshotInfo::extract_hash_from_url("").is_err());
+        assert!(SnapshotInfo::extract_hash_from_url("not-a-url").is_err());
+        assert!(SnapshotInfo::extract_hash_from_url("https://example.com/invalid").is_err());
+    }
+
+    #[test]
     fn test_get_snapshot_hashes_no_incremental() {
         let info = SnapshotInfo {
             solana_version: "1.0.0".to_string(),
@@ -451,16 +487,16 @@ mod tests {
             uploaded_by: "test".to_string(),
             full_snapshot_hash: "full_hash".to_string(),
             full_snapshot_slot: 100,
-            full_snapshot_url: "https://example.com/snapshot-full-abc123.tar.zst".to_string(),
+            full_snapshot_url: "https://example.com/snapshot-100-abc123.tar.zst".to_string(),
             incremental_snapshot_hash: "".to_string(),
             incremental_snapshot_slot: 0,
-            incremental_snapshot_url: "https://example.com/incremental-snapshot-invalid.tar.zst"
-                .to_string(),
+            incremental_snapshot_url:
+                "https://example.com/incremental-snapshot-100-200-xyz789.tar.zst".to_string(),
         };
 
         let result = info.get_snapshot_hashes().unwrap();
         assert_eq!(result.full, (100, "abc123".to_string()));
-        assert_eq!(result.incremental, Some((0, "invalid".to_string())));
+        assert_eq!(result.incremental, Some((0, "xyz789".to_string())));
     }
 
     #[test]
@@ -476,11 +512,11 @@ mod tests {
             uploaded_by: "test".to_string(),
             full_snapshot_hash: "full_hash".to_string(),
             full_snapshot_slot: 100,
-            full_snapshot_url: "https://example.com/snapshot-full-abc123.tar.zst".to_string(),
+            full_snapshot_url: "https://example.com/snapshot-100-abc123.tar.zst".to_string(),
             incremental_snapshot_hash: "".to_string(),
             incremental_snapshot_slot: 0,
-            incremental_snapshot_url: "https://example.com/incremental-snapshot-invalid.tar.zst"
-                .to_string(),
+            incremental_snapshot_url:
+                "https://example.com/incremental-snapshot-100-200-xyz789.tar.zst".to_string(),
         };
 
         // Serialize to JSON
@@ -492,6 +528,6 @@ mod tests {
         // Create state with validation
         let state = deserialized.get_snapshot_hashes().unwrap();
         assert_eq!(state.full, (100, "abc123".to_string()));
-        assert_eq!(state.incremental, Some((0, "invalid".to_string())));
+        assert_eq!(state.incremental, Some((0, "xyz789".to_string())));
     }
 }

@@ -43,7 +43,7 @@ impl LocalStorage {
             }
             Err(e) => {
                 error!("Failed to open file {}: {}", file_path.display(), e);
-                (StatusCode::NOT_FOUND, "File not found").into_response()
+                (StatusCode::NOT_FOUND, "File not found\n").into_response()
             }
         }
     }
