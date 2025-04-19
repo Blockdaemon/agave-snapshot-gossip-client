@@ -1,3 +1,4 @@
+mod atomic_state;
 mod config;
 mod constants;
 mod gossip;
@@ -11,7 +12,7 @@ mod stun;
 mod upnp;
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU16};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -21,6 +22,7 @@ use igd::PortMappingProtocol;
 use log::{error, info, warn};
 
 // Our local crates
+use atomic_state::AtomicState;
 use gossip::start_gossip_client;
 use rpc::RpcServer;
 use scraper::MetadataScraper;
@@ -132,8 +134,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Setting up signal handler");
     let signal_handler = setup_signal_handler(exit.clone()); // clone #1
 
-    let num_peers = Arc::new(AtomicI64::new(0));
-    let shred_version = Arc::new(AtomicU16::new(0));
+    // Create shared state
+    let atomic_state = AtomicState::new();
 
     // Create scraper
     let scraper = Arc::new(MetadataScraper::new(
@@ -143,31 +145,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // start gossip client if enabled
     let gossip_handles = if !resolved.disable_gossip {
+        // Start gossip client
         let (monitor_handle, gossip_handle) = start_gossip_client(
             &resolved,
             scraper.clone(),
+            atomic_state.clone(),
             exit.clone(),
-            num_peers.clone(),
-            shred_version.clone(),
         )
         .await?;
         Some((monitor_handle, gossip_handle))
     } else {
-        shred_version.store(
-            resolved
-                .shred_version
-                .unwrap_or(resolved.shred_version.unwrap_or(0)),
-            std::sync::atomic::Ordering::SeqCst,
-        );
+        warn!("Gossip disabled, not starting gossip client");
+        // Restore logic to set shred_version from config when gossip is off
+        atomic_state.set_shred_version(resolved.shred_version.unwrap_or(0));
         None
     };
 
-    // Create rpc server
-    let rpc_server = RpcServer::new(scraper, num_peers, shred_version, resolved.enable_proxy);
+    // Create RPC server
+    let rpc_server = RpcServer::new(scraper, atomic_state.clone(), resolved.enable_proxy);
 
     let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
     info!("Starting RPC server on {}...", rpc_listen);
-    rpc_server.start(rpc_listen, exit.clone()).await?;
+    let exit_for_rpc = exit.clone(); // Clone before spawn
+    let rpc_handle = tokio::spawn(async move {
+        if let Err(e) = rpc_server
+            .start(rpc_listen, exit_for_rpc) // Pass the pre-cloned Arc
+            .await
+        {
+            error!("RPC server error: {}", e);
+        }
+    });
     info!("Started RPC server");
 
     warn!("Ready to accept connections");
@@ -187,7 +194,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Signaling RPC server to exit...");
     // Signal exit to gossip/monitor service and RPC server
-    exit.store(true, std::sync::atomic::Ordering::SeqCst);
+    exit.store(true, std::sync::atomic::Ordering::SeqCst); // Use original exit
+
+    info!("Waiting for RPC server shutdown...");
+    rpc_handle.await.unwrap_or_else(|e| {
+        error!("Failed to join RPC server task: {}", e);
+        // Consider if process::exit is appropriate here or just log
+    });
+    info!("RPC server shutdown complete");
 
     // Wait for gossip services if they were started
     if let Some((monitor_handle, gossip_handle)) = gossip_handles {
