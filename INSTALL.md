@@ -6,7 +6,7 @@ The Agave Snapshot Gossip Client is available as a Debian package, and runs as a
 Download the package from the [Release Page](https://github.com/Blockdaemon/agave-snapshot-gossip-client/releases) or wget it:
 
 ```bash
-wget https://github.com/Blockdaemon/agave-snapshot-gossip-client/releases/download/v#####/agave-snapshot-gossip-client_1.0.0_amd64.deb
+wget https://github.com/Blockdaemon/agave-snapshot-gossip-client/releases/download/v#.#.#/agave-snapshot-gossip-client_#.#.#_amd64.deb
 ```
 
 Install the package:
