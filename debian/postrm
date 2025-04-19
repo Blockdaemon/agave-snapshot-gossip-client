@@ -9,29 +9,12 @@ case "$1" in
         deluser --system --quiet gossip-client 2>/dev/null || true
         delgroup --system --quiet gossip-client 2>/dev/null || true
 
-        # Ensure we can remove the directory
+        # Remove non-json files from config directory
         if [ -d "/etc/gossip-client" ]; then
-            echo "Removing /etc/gossip-client directory contents (preserving .json files)..."
-            # Move .json files to a temporary location
-            tmpdir=$(mktemp -d)
-            find /etc/gossip-client -maxdepth 1 -name "*.json" -exec mv {} "$tmpdir/" \;
-
-            # Remove the directory
-            rm -rf /etc/gossip-client
-
-            # Recreate directory and restore .json files
-            mkdir -p /etc/gossip-client
-            if [ -n "$(ls -A "$tmpdir/")" ]; then
-                mv "$tmpdir"/* /etc/gossip-client/
-                echo "Preserved .json files in /etc/gossip-client"
-            fi
-            rmdir "$tmpdir"
-
-            # Verify removal of non-json files
-            if [ -d "/etc/gossip-client" ]; then
-                echo "Directory contents after purge:"
-                ls -la /etc/gossip-client
-            fi
+            echo "Removing non-json files from /etc/gossip-client..."
+            find /etc/gossip-client -maxdepth 1 -type f ! -name "*.json" -delete
+            echo "Directory contents after purge:"
+            ls -la /etc/gossip-client
         else
             echo "/etc/gossip-client directory not found"
         fi
@@ -42,7 +25,7 @@ case "$1" in
         systemctl disable gossip-client.service || true
 
         # Reload systemd daemon
-	echo "Reloading systemd daemon"
+        echo "Reloading systemd daemon"
         systemctl daemon-reload
         ;;
 esac

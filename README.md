@@ -77,7 +77,7 @@ The system supports three deployment models:
    ```
    or for more verbose logging:
    ```bash
-   RUST_LOG=debug cargo run -r
+   RUST_LOG=h2=off,hyper_util=off,solana_metrics=off,solana_gossip::cluster_info=off,debug cargo run -r
    ```
 
 See the [Installation Guide](INSTALL.md) file for more information on installing the Debian package or using docker.
