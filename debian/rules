@@ -8,6 +8,7 @@ override_dh_auto_install:
 	mkdir -p debian/agave-snapshot-gossip-client/usr/sbin
 	mkdir -p debian/agave-snapshot-gossip-client/lib/systemd/system
 	mkdir -p debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client
+	mkdir -p debian/agave-snapshot-gossip-client/etc/gossip-client
 
 	# Install binary
 	install -m 755 target/release/snapshot-gossip-client debian/agave-snapshot-gossip-client/usr/sbin/
