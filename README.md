@@ -69,15 +69,15 @@ The system supports three deployment models:
 
 3. Run the client:
    ```bash
+   cargo run -r
+   ```
+   or for minimal logging:
+   ```bash
    RUST_LOG=warn cargo run -r
    ```
-   or
+   or for more verbose logging:
    ```bash
-   RUST_LOG=snapshot_gossip_client=info cargo run -r
-   ```
-   or
-   ```bash
-   RUST_LOG=solana_metrics=off,debug cargo run -r
+   RUST_LOG=debug cargo run -r
    ```
 
 See the [Installation Guide](INSTALL.md) file for more information on installing the Debian package or using docker.
