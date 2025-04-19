@@ -82,7 +82,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::var("INVOCATION_ID").is_ok() {
         // We're running under systemd
         builder.format_timestamp(None);
+    } else {
+        // Default format for non-systemd environments
+        builder.format_timestamp_secs();
+        builder.format_level(true);
+        builder.format_target(true);
+        builder.format_module_path(true);
     }
+
+    // Set default log level to INFO if not specified
+    if std::env::var("RUST_LOG").is_err() {
+        // Default to turning off noisy dependencies and setting info level
+        builder.parse_filters(constants::DEFAULT_LOG_FILTERS);
+    }
+
     builder.init();
 
     info!("Starting up");
