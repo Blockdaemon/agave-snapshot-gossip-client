@@ -1,0 +1,148 @@
+name: Test Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      head_sha:
+        required: true
+        type: string
+        description: 'The SHA of the commit triggering the workflow'
+      repo_full_name:
+        required: true
+        type: string
+        description: 'The full repository name (owner/repo)'
+
+permissions:
+  contents: read
+  packages: read # Needed to pull from GHCR
+
+jobs:
+  test-docker:
+    name: Test Docker Image Functionality
+    runs-on: ubuntu-latest
+    # No if condition needed here, the caller handles it
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # Caller needs to ensure token is available or job needs permission
+
+      - name: Determine Image Tag
+        # WARNING: If the repo owner/name changes, the GHCR path might need manual updating
+        # as GHCR package namespaces may not follow renames automatically.
+        id: image_tag
+        env:
+          REPO_FULL_NAME: ${{ inputs.repo_full_name }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+        run: |
+          LOWER_REPO="${REPO_FULL_NAME,,}"
+          # Construct tag using sha-<short-sha> format to match docker.yml push
+          SHORT_SHA="${HEAD_SHA::7}"
+          FINAL_TAG="ghcr.io/${LOWER_REPO}:sha-${SHORT_SHA}"
+          echo "tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Pull & Verify Docker Image
+        run: docker pull ${{ steps.image_tag.outputs.tag }}
+
+      - name: Set up test files and mock HTTP server
+        id: mock_server_setup_docker
+        run: |
+          mkdir -p test-storage
+          echo '{"local": "test"}' > test-storage/latest.json
+          echo '{"remote": "test"}' > latest.json
+          # Create directory for config mount
+          mkdir -p etc/gossip-client
+          python3 -m http.server 8000 &
+          echo "server_pid=$!" >> $GITHUB_OUTPUT
+          echo "Mock HTTP server started on port 8000."
+          sleep 2
+
+      - name: Test Local Storage (Docker)
+        run: |
+          set -e
+          echo "--- Testing Local Storage ---"
+          echo -e 'disable_gossip = true\nstorage_path = "/storage"\nenable_proxy = false' > etc/gossip-client/config.toml
+
+          docker run --rm -d --name test-docker -p 8899:8899 \
+            -v $(pwd)/test-storage:/storage \
+            -v $(pwd)/etc/gossip-client/config.toml:/etc/gossip-client/config.toml \
+            ${{ steps.image_tag.outputs.tag }}
+          echo "Container started for local test, waiting..."
+          sleep 3 # Reduced sleep
+
+          # Test endpoints
+          echo "Testing GET /health"
+          curl --fail --silent --show-error http://localhost:8899/health
+          echo "Testing GET /latest.json"
+          curl --fail --silent --show-error http://localhost:8899/latest.json | grep '{"local": "test"}'
+          echo "Testing POST / (getPublicKey)"
+          curl --fail --silent --show-error -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","id":1,"method":"getPublicKey"}' http://localhost:8899/ | grep '"result":""'
+
+          docker stop test-docker
+          echo "--- Local Storage Test Done ---"
+
+      - name: Test Remote Redirect (Docker)
+        run: |
+          set -e
+          echo "--- Testing Remote Redirect ---"
+          echo -e 'disable_gossip = true\nstorage_path = "http://host.docker.internal:8000/"\nenable_proxy = false' > etc/gossip-client/config.toml
+
+          docker run --rm -d --name test-docker -p 8899:8899 --add-host=host.docker.internal:host-gateway \
+            -v $(pwd)/etc/gossip-client/config.toml:/etc/gossip-client/config.toml \
+            ${{ steps.image_tag.outputs.tag }}
+          echo "Container started for redirect test, waiting..."
+          sleep 3 # Reduced sleep
+
+          # Test endpoints
+          echo "Testing GET /health"
+          curl --fail --silent --show-error http://localhost:8899/health
+          echo "Testing GET /latest.json (expect 307)"
+          REDIRECT_LOCATION=$(curl --fail --silent --show-error -I http://localhost:8899/latest.json | grep -i Location | cut -d' ' -f2 | tr -d '\r')
+          EXPECTED_LOCATION="http://host.docker.internal:8000/latest.json"
+          if [ "$REDIRECT_LOCATION" != "$EXPECTED_LOCATION" ]; then
+            echo "Error: Unexpected redirect location. Got '$REDIRECT_LOCATION', expected '$EXPECTED_LOCATION'"
+            exit 1
+          fi
+          echo "Redirect location verified."
+          echo "Testing POST / (getPublicKey)"
+          curl --fail --silent --show-error -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","id":1,"method":"getPublicKey"}' http://localhost:8899/ | grep '"result":""'
+
+          docker stop test-docker
+          echo "--- Remote Redirect Test Done ---"
+
+      - name: Test Remote Proxy (Docker)
+        run: |
+          set -e
+          echo "--- Testing Remote Proxy ---"
+          echo -e 'disable_gossip = true\nstorage_path = "http://host.docker.internal:8000/"\nenable_proxy = true' > etc/gossip-client/config.toml
+
+          docker run --rm -d --name test-docker -p 8899:8899 --add-host=host.docker.internal:host-gateway \
+            -v $(pwd)/etc/gossip-client/config.toml:/etc/gossip-client/config.toml \
+            ${{ steps.image_tag.outputs.tag }}
+          echo "Container started for proxy test, waiting..."
+          sleep 3 # Reduced sleep
+
+          # Test endpoints
+          echo "Testing GET /health"
+          curl --fail --silent --show-error http://localhost:8899/health
+          echo "Testing GET /latest.json (expect proxied content)"
+          curl --fail --silent --show-error http://localhost:8899/latest.json | grep '{"remote": "test"}'
+          echo "Testing POST / (getPublicKey)"
+          curl --fail --silent --show-error -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","id":1,"method":"getPublicKey"}' http://localhost:8899/ | grep '"result":""'
+
+          docker stop test-docker
+          echo "--- Remote Proxy Test Done ---"
+
+      - name: Cleanup Docker Test
+        if: always() # Always run cleanup
+        run: |
+          echo "Removing test config file..."
+          rm -rf etc # Remove created directory and file
+          echo "Stopping mock HTTP server..."
+          kill ${{ steps.mock_server_setup_docker.outputs.server_pid }} || echo "Server already stopped."

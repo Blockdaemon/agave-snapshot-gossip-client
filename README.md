@@ -144,7 +144,8 @@ Explicit `public_ip` and `shred_version` configuration is always checked against
 
 ## Known Issues
    - `--debug` builds may be unstable and have significantly higher memory and CPU usage. Use `-r` or `--release` to avoid this.
-   - Large crate dependency footprint, huge memory and CPU usage for large gossip networks.
+   - Large crate dependency footprint (900+).
+   - Excessive memory and CPU usage for large gossip networks ([Issue 53](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/53)).
    - We do not periodically renew the UPnP port mappings, so if the router expires it, you may lose connectivity if you rely on on it ([issue #11](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/11)).
    - For a detailed analysis of the benefits, limitations, and production considerations of the SSDN implementation, please see [TRADEOFFS.md](TRADEOFFS.md).
 

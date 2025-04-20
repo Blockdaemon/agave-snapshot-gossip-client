@@ -54,5 +54,32 @@ jobs:
       contents: read
       packages: write
 
+  test-debian:
+    name: Test Debian Package
+    needs: [debian]
+    if: | # Condition to run only if dependency succeeded
+      !failure() && !cancelled() &&
+      needs.debian.result == 'success'
+    permissions:
+      contents: read
+      actions: read # Needed for download-artifact in test-debian
+    uses: ./.github/workflows/test-debian.yml
+
+  test-docker:
+    name: Test Docker Image
+    needs: [docker]
+    if: | # Condition to run only if dependency succeeded
+      !failure() && !cancelled() &&
+      needs.docker.result == 'success'
+    permissions:
+      contents: read
+      packages: read # Needed for docker pull in test-docker
+      actions: read # Potentially needed if docker tests download artifacts
+    uses: ./.github/workflows/test-docker.yml
+    with:
+      head_sha: ${{ github.sha }} # Pass the commit SHA
+      repo_full_name: ${{ github.repository }} # Pass the repository name
+    # NOTE: secrets are not passed by default, but GITHUB_TOKEN has packages: read permission here
+
 permissions:
   contents: read

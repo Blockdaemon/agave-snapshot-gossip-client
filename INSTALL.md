@@ -56,7 +56,7 @@ docker pull ghcr.io/blockdaemon/agave-snapshot-gossip-client:pr-123
 1. Create a config file (see `example-config.toml`)
 2. Run the container with your config:
 ```bash
-docker run -v /path/to/config.toml:/etc/snapshot-gossip-client/config.toml ghcr.io/blockdaemon/agave-snapshot-gossip-client:latest
+docker run -v /path/to/config.toml:/etc/gossip-client/config.toml ghcr.io/blockdaemon/agave-snapshot-gossip-client:latest
 ```
 
 The container exposes the following ports:
@@ -66,5 +66,5 @@ The container exposes the following ports:
 
 Make sure to map these ports when running the container if you need to access them from outside:
 ```bash
-docker run -p 8001:8001/udp -p 8001:8001/tcp -p 8899:8899/tcp -v /path/to/config.toml:/etc/snapshot-gossip-client/config.toml ghcr.io/blockdaemon/agave-snapshot-gossip-client:latest
+docker run -p 8001:8001/udp -p 8001:8001/tcp -p 8899:8899/tcp -v /path/to/config.toml:/etc/gossip-client/config.toml ghcr.io/blockdaemon/agave-snapshot-gossip-client:latest
 ```

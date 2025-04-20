@@ -1,0 +1,91 @@
+name: Test Debian Package
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read # Needed for download-artifact
+
+jobs:
+  test-debian:
+    name: Test Debian Package Installation
+    runs-on: ubuntu-latest
+    # No if condition needed here, the caller handles it
+
+    steps:
+      - name: Download Debian package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-packages # Uploaded by debian.yml job
+          # No run-id needed, defaults to current workflow run
+          path: ./artifacts/debian
+
+      - name: Find .deb file
+        id: find_deb
+        run: |
+          DEB_FILE=$(find ./artifacts/debian -name '*.deb' -print -quit)
+          if [ -z "$DEB_FILE" ]; then
+            echo "No .deb file found in artifact"
+            exit 1
+          fi
+          # Assuming package name matches the start of the deb filename before the first underscore
+          PKG_NAME=$(basename "$DEB_FILE" | cut -d_ -f1)
+          echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
+          echo "deb_filename=$(basename $DEB_FILE)" >> $GITHUB_OUTPUT
+          echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
+          echo "Found package: $PKG_NAME from $DEB_FILE"
+
+      - name: Start Debian Container
+        run: |
+          docker run --rm -d --name test-debian debian:stable tail -f /dev/null
+          echo "Debian container started."
+
+      - name: Install Package and Dependencies
+        run: |
+          set -e
+          docker cp ${{ steps.find_deb.outputs.deb_file }} test-debian:/tmp/
+          # Install package and check dependencies
+          docker exec test-debian bash -c "apt-get update && apt-get install -y --no-install-recommends wget"
+          docker exec test-debian bash -c "dpkg -i /tmp/${{ steps.find_deb.outputs.deb_filename }}"
+          docker exec test-debian bash -c "apt-get install -fy --no-install-recommends"
+          echo "Package installed."
+
+      - name: Verify Installation
+        run: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+          echo "Checking group..."
+          docker exec test-debian getent group gossip-client
+          echo "Checking user..."
+          docker exec test-debian getent passwd gossip-client
+          echo "Checking config directory..."
+          docker exec test-debian test -d /etc/gossip-client
+          echo "Checking config file..."
+          docker exec test-debian test -f /etc/gossip-client/config.toml
+          echo "Checking binary exists and is executable..."
+          docker exec test-debian test -x /usr/sbin/snapshot-gossip-client
+          echo "Checking binary version..."
+          # Check that the binary runs and outputs version
+          docker exec test-debian /usr/sbin/snapshot-gossip-client -v
+          echo "All checks passed."
+
+      - name: Purge Package
+        run: |
+          docker exec test-debian dpkg --purge ${{ steps.find_deb.outputs.pkg_name }}
+          echo "Package purged."
+
+      - name: Verify Purge
+        run: |
+          # Check binary and config file are gone
+          docker exec test-debian test ! -f /usr/sbin/snapshot-gossip-client
+          docker exec test-debian test ! -f /etc/gossip-client/config.toml
+          # Check user and group are gone (use sh -c '! cmd' to check for non-zero exit code)
+          docker exec test-debian sh -c '! getent group gossip-client'
+          docker exec test-debian sh -c '! getent passwd gossip-client'
+          echo "Purge verified."
+
+      - name: Cleanup Debian Test
+        if: always() # Always run cleanup
+        run: |
+          echo "Stopping Debian container..."
+          docker stop test-debian || echo "Container already stopped."

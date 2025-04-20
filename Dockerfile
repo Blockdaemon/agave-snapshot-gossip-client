@@ -36,4 +36,4 @@ USER snapshot-gossip-client
 
 # Set the entrypoint
 ENV RUST_LOG=solana_metrics::metrics=off,solana_gossip::cluster_info=off,info
-ENTRYPOINT ["/usr/local/sbin/snapshot-gossip-client", "-c", "/etc/snapshot-gossip-client/config.toml"]
+ENTRYPOINT ["/usr/local/sbin/snapshot-gossip-client", "-c", "/etc/gossip-client/config.toml"]
