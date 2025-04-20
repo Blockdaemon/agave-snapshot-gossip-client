@@ -305,33 +305,45 @@ fn make_gossip_node(
     (gossip_service, cluster_info)
 }
 
+/// Reads the keypair file, handling permissions errors and falling back to a new keypair.
+pub fn read_node_keypair(keypair_path: &str) -> Result<Keypair> {
+    match read_keypair_file(keypair_path) {
+        Ok(keypair) => Ok(keypair),
+        Err(err) => {
+            if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+                if io_err.kind() == std::io::ErrorKind::PermissionDenied {
+                    error!(
+                        "Permission denied when reading keypair file {}: {}",
+                        keypair_path, err
+                    );
+                    // Use anyhow to propagate the error if needed, or handle differently
+                    return Err(anyhow::anyhow!(
+                        "Permission denied reading keypair: {}",
+                        keypair_path
+                    ));
+                }
+            }
+            warn!(
+                "Failed to read keypair file {}, generating new: {}",
+                keypair_path, err
+            );
+            Ok(Keypair::new())
+        }
+    }
+}
+
 pub async fn start_gossip_client(
     resolved: &ResolvedConfig,
     scraper: Arc<MetadataScraper>,
     atomic_state: AtomicState,
     exit: Arc<AtomicBool>,
 ) -> Result<(tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)> {
-    let node_keypair = match read_keypair_file(&resolved.keypair_path) {
-        Ok(keypair) => keypair,
-        Err(err) => {
-            if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
-                if io_err.kind() == std::io::ErrorKind::PermissionDenied {
-                    error!(
-                        "Permission denied when reading keypair file {}: {}",
-                        resolved.keypair_path, err
-                    );
-                    std::process::exit(1);
-                }
-            }
-            warn!(
-                "Failed to read keypair file {}: {}",
-                resolved.keypair_path, err
-            );
-            Keypair::new()
-        }
-    };
-    info!("Our pubkey: {}", node_keypair.pubkey());
-    atomic_state.set_pubkey(node_keypair.pubkey().to_string());
+    // Use the helper function to read the keypair
+    let node_keypair = read_node_keypair(&resolved.keypair_path)?;
+    // Set the pubkey in the shared state now that we have read the keypair
+    let pubkey_str = node_keypair.pubkey().to_string();
+    info!("Our pubkey: {}", pubkey_str); // Log pubkey here
+    atomic_state.set_public_key(pubkey_str);
 
     // Start gossip service
     let gossip_addr = &SocketAddr::new(resolved.public_ip, resolved.gossip_port); // public_ip advertised, port portion is used with hard coded UNSPECIFIED listen IP

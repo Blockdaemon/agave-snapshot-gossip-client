@@ -24,7 +24,7 @@ use log::{error, info, warn};
 // Our local crates
 use atomic_state::AtomicState;
 use gossip::start_gossip_client;
-use rpc::RpcServer;
+use rpc::start_rpc_service;
 use scraper::MetadataScraper;
 
 #[derive(Parser)]
@@ -130,11 +130,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // We make 3 exit clones, one for the signal handler, one for the gossip service, and one for the monitor
     let exit = Arc::new(AtomicBool::new(false));
+    let exit_signal = exit.clone(); // Clone specifically for the final signal store
 
     info!("Setting up signal handler");
-    let signal_handler = setup_signal_handler(exit.clone()); // clone #1
+    let signal_handler = setup_signal_handler(exit.clone()); // Pass original exit clone
 
-    // Create shared state
+    // Create shared state (pubkey initialized empty, set by gossip client if enabled)
     let atomic_state = AtomicState::new();
 
     // Create scraper
@@ -143,6 +144,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         resolved.expected_genesis_hash.clone(),
     ));
 
+    // Calculate serve_local based on scraper
+    let serve_local = scraper
+        .storage_path()
+        .map(|uri| uri.scheme_str() == Some("file"))
+        .unwrap_or(false);
+
     // start gossip client if enabled
     let gossip_handles = if !resolved.disable_gossip {
         // Start gossip client
@@ -150,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &resolved,
             scraper.clone(),
             atomic_state.clone(),
-            exit.clone(),
+            exit.clone(), // Pass original exit clone
         )
         .await?;
         Some((monitor_handle, gossip_handle))
@@ -161,17 +168,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    // Create RPC server
-    let rpc_server = RpcServer::new(scraper, atomic_state.clone(), resolved.enable_proxy);
+    // Create AppState directly
+    let app_state = rpc::AppState {
+        scraper,
+        atomic_state: atomic_state.clone(),
+        enable_proxy: resolved.enable_proxy,
+        serve_local,
+    };
 
+    // Start RPC service task
     let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);
     info!("Starting RPC server on {}...", rpc_listen);
-    let exit_for_rpc = exit.clone(); // Clone before spawn
     let rpc_handle = tokio::spawn(async move {
-        if let Err(e) = rpc_server
-            .start(rpc_listen, exit_for_rpc) // Pass the pre-cloned Arc
-            .await
-        {
+        // Pass AppState directly to the service function
+        if let Err(e) = start_rpc_service(rpc_listen, app_state, exit.clone()).await {
+            // Pass original exit clone
             error!("RPC server error: {}", e);
         }
     });
@@ -194,7 +205,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Signaling RPC server to exit...");
     // Signal exit to gossip/monitor service and RPC server
-    exit.store(true, std::sync::atomic::Ordering::SeqCst); // Use original exit
+    exit_signal.store(true, std::sync::atomic::Ordering::SeqCst); // Use the pre-cloned signal Arc
 
     info!("Waiting for RPC server shutdown...");
     rpc_handle.await.unwrap_or_else(|e| {
