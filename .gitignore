@@ -9,3 +9,4 @@
 /debian/agave-snapshot-gossip-client/
 /debian/debhelper-build-stamp
 /debian/files
+/storage

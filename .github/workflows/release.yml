@@ -30,8 +30,7 @@ jobs:
     steps:
       # Downloads from linux-x86_64 specific build job (build-common.yml):
       # - Individual files: snapshot-gossip-client, example-config.toml, README.md, INSTALL.md
-      # - tar.gz bundle: snapshot-gossip-client-linux-x86_64.tar.gz
-      # All these files are uploaded as a single artifact named 'linux-x86_64'
+      # - tar.gz bundle: snapshot-gossip-client-linux-x86_64.tar.gz (as artifact 'tarball-linux-x86_64')
       - name: List available artifacts
         run: |
           echo "Available artifacts:"
@@ -40,38 +39,73 @@ jobs:
       # Download all artifacts from the build workflow
       # Note: The linux-x86_64 artifact will be downloaded to artifacts/linux-x86_64/
       # because it contains multiple files, while the debian-packages artifact
-      # will be downloaded directly to artifacts/ as it contains a single file
-      - name: Download all artifacts
+      # will be downloaded directly to release_assets/
+      - name: Create release assets directory
+        run: mkdir -p release_assets
+
+      - name: Download tarball artifact
+        # This downloads the build-output artifact containing versionless tar.gz and zip
         uses: actions/download-artifact@v4
         with:
-          pattern: linux-x86_64
-          path: artifacts
+          name: build-output-linux-x86_64
+          path: release_assets
 
       # Downloads from debian job (debian.yml):
       # - Debian package: debian-package artifact
-      # Note: This will be downloaded directly to artifacts/ as it contains a single file
+      # Note: This will be downloaded directly to release_assets/
       - name: Download Debian package(s)
         uses: actions/download-artifact@v4
         with:
           name: debian-packages
-          path: artifacts
+          path: release_assets
+
+      - name: Rename archives with version tag
+        # Also extracts necessary docs from the tarball
+        # Release job only runs on tags, so github.ref_name is like 'v1.2.3'
+        run: |
+          cd release_assets
+          VERSION_TAG="${{ github.ref_name }}"
+          REPO_NAME="${{ github.event.repository.name }}"
+          TARBALL_NAME_VER="${REPO_NAME}-${VERSION_TAG}-linux-x86_64.tar.gz"
+          TARBALL_NAME_NOVER="${REPO_NAME}-linux-x86_64.tar.gz"
+          # Extract specific docs before renaming the tarball
+          echo "Extracting docs from ${TARBALL_NAME_NOVER}"
+          tar xzf "${TARBALL_NAME_NOVER}" --strip-components=2 "${REPO_NAME}/doc/README.md" "${REPO_NAME}/doc/INSTALL.md"
+          # Verify extraction
+          ls -l README.md INSTALL.md
+
+          echo "Renaming archives with version: ${VERSION_TAG}"
+          mv "${TARBALL_NAME_NOVER}" "${TARBALL_NAME_VER}"
+          echo "Renamed files:"
+          ls -l
+          cd ..
 
       - name: Debug artifacts directory
         run: |
-          echo "Contents of artifacts directory:"
-          ls -la artifacts/
-          echo "Contents of artifacts/linux-x86_64 directory:"
-          ls -la artifacts/linux-x86_64/
+          echo "Contents of release_assets directory:"
+          ls -la release_assets/
 
-      # Creates release with:
-      # - All files from linux-x86_64 artifact (including tar.gz)
-      # - All Debian packages from debian-packages artifact
+      # Generate sha256sums for the main release assets
+      - name: Generate Checksums
+        run: |
+          cd release_assets
+          # Checksum the renamed tar.gz and the deb file(s)
+          # Use wildcard for deb as its name includes version determined by debian.yml
+          VERSION_TAG="${{ github.ref_name }}"
+          REPO_NAME="${{ github.event.repository.name }}"
+          sha256sum \
+            "${REPO_NAME}-${VERSION_TAG}-linux-x86_64.tar.gz" \
+            agave-snapshot-gossip-client_*.deb > sha256sums.txt
+          echo "Generated sha256sums.txt:"
+          cat sha256sums.txt
+          cd ..
+
+      # Creates release with specific artifacts:
+      # Upload all files from the release_assets directory
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/linux-x86_64/**
-            artifacts/agave-snapshot-gossip-client_*.deb
+          files: release_assets/*
           generate_release_notes: true
           draft: false
           prerelease: false

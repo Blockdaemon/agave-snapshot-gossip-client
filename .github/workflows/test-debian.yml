@@ -24,6 +24,7 @@ jobs:
       - name: Find .deb file
         id: find_deb
         run: |
+          # Find the single .deb file within the downloaded artifact path
           DEB_FILE=$(find ./artifacts/debian -name '*.deb' -print -quit)
           if [ -z "$DEB_FILE" ]; then
             echo "No .deb file found in artifact"
@@ -44,9 +45,11 @@ jobs:
       - name: Install Package and Dependencies
         run: |
           set -e
-          docker cp ${{ steps.find_deb.outputs.deb_file }} test-debian:/tmp/
+          # Use the validated DEB_FILE path and input filename
+          docker cp "${{ steps.find_deb.outputs.deb_file }}" test-debian:/tmp/
           # Install package and check dependencies
           docker exec test-debian bash -c "apt-get update && apt-get install -y --no-install-recommends wget"
+          # Use the found filename
           docker exec test-debian bash -c "dpkg -i /tmp/${{ steps.find_deb.outputs.deb_filename }}"
           docker exec test-debian bash -c "apt-get install -fy --no-install-recommends"
           echo "Package installed."

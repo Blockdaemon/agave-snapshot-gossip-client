@@ -19,8 +19,20 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-x86_64
+          name: build-output-linux-x86_64
           path: artifacts
+
+      - name: Extract binary from tarball
+        working-directory: artifacts
+        run: |
+          # Use fixed tarball name
+          TARBALL="${{ github.event.repository.name }}-linux-x86_64.tar.gz"
+          echo "Extracting from tarball: ${TARBALL}"
+          # Extract binary, stripping the top-level dir (e.g., agave-snapshot-gossip-client/)
+          # Resulting path is bin/snapshot-gossip-client
+          tar xzf "${TARBALL}" --strip-components=1 "${{ github.event.repository.name }}/bin/snapshot-gossip-client"
+          # Verify extraction
+          ls -l bin/snapshot-gossip-client
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -58,4 +70,4 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BINARY_PATH=artifacts/snapshot-gossip-client
+            BINARY_PATH=artifacts/bin/snapshot-gossip-client
