@@ -62,7 +62,7 @@ jobs:
       needs.debian.result == 'success'
     permissions:
       contents: read
-      actions: read # Needed for download-artifact in test-debian
+      actions: read # Needed for download-artifact
     uses: ./.github/workflows/test-debian.yml
 
   test-docker:

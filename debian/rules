@@ -24,8 +24,10 @@ override_dh_auto_install:
 	# Install documentation
 	install -m 644 example-config.toml debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/example-config.toml
 	install -m 644 README.md debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
-	install -m 644 INSTALL.md debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
 	install -m 644 LICENSE debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
+
+	# Copy all files from docs/ directory
+	cp -r docs/* debian/agave-snapshot-gossip-client/usr/share/doc/agave-snapshot-gossip-client/
 
 override_dh_install:
 	dh_install --exclude=/etc/gossip-client/config.toml

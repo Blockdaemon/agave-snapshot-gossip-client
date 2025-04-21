@@ -82,12 +82,6 @@ jobs:
           cache-targets: true
           cache-all-crates: true
 
-      - name: Debug cache hit
-        run: |
-          echo "Cache hit: ${{ steps.cache.outputs.cache-hit }}"
-          echo "CACHE_ON_FAILURE: $CACHE_ON_FAILURE"
-          echo "CARGO_INCREMENTAL: $CARGO_INCREMENTAL"
-
       - name: Get timestamp
         id: get_timestamp
         run: echo "timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
@@ -96,6 +90,7 @@ jobs:
         id: get_git_info
         run: |
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          # Get tag for release naming, fallback for non-tag builds
           echo "tag=$(git describe --tags --always)" >> $GITHUB_OUTPUT
 
       - name: Build
@@ -109,35 +104,50 @@ jobs:
             cargo clean
             RUSTFLAGS="-C target-cpu=x86-64" cargo build --release
           }
-          mkdir -p artifacts
-          cp target/release/snapshot-gossip-client artifacts/
-          cp example-config.toml artifacts/
-          cp README.md artifacts/
-          cp INSTALL.md artifacts/
-
-      - name: Run tests
-        run: |
-          cargo test -- --nocapture
-
-      - name: Create tar.gz bundle in artifacts directory, using files already in artifacts directory
-        if: ${{ inputs.upload_artifacts }}
-        run: |
-          cd artifacts
-          tar czf snapshot-gossip-client-linux-x86_64.tar.gz snapshot-gossip-client example-config.toml README.md INSTALL.md
-
-      # Upload all artifacts in the artifacts directory, including the tar.gz bundle
-      # Note: Using artifacts/* with a named artifact (linux-x86_64) will create a subdirectory
-      # named after the artifact when downloaded, resulting in artifacts/linux-x86_64/
-      - name: Upload all artifacts in the artifacts directory, including the tar.gz bundle
-        if: ${{ inputs.upload_artifacts }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-x86_64
-          path: artifacts/*
-          if-no-files-found: error
 
       - name: Verify version
         if: ${{ inputs.verify_version }}
         run: |
           ./target/release/snapshot-gossip-client --version
 
+      - name: Run tests
+        run: |
+          cargo test -- --nocapture
+
+      - name: Prepare staging directory for tarball
+        run: |
+          # Staging dir named after repo for top-level dir in tarball
+          STAGING="${{ github.event.repository.name }}"
+          mkdir -p ${STAGING}/bin ${STAGING}/doc ${STAGING}/etc
+          cp target/release/snapshot-gossip-client ${STAGING}/bin/
+          cp example-config.toml ${STAGING}/etc/
+          # Copy main docs into staging/doc
+          cp README.md ${STAGING}/doc/
+          cp docs/* ${STAGING}/doc/
+          echo "Staging directory structure:"
+          ls -lR ${STAGING}/
+
+      - name: Create versionless tar.gz bundle
+        if: ${{ inputs.upload_artifacts }}
+        run: |
+          TOP_LEVEL_DIR="${{ github.event.repository.name }}"
+          TARBALL_NAME="${TOP_LEVEL_DIR}-linux-x86_64.tar.gz"
+
+          # Create tarball *of* the top-level directory
+          tar czf "${TARBALL_NAME}" "${TOP_LEVEL_DIR}"
+
+          echo "Created tarball:"
+          ls -l "${TARBALL_NAME}"
+          # Set step output instead of env var
+          echo "tarball_path=${TARBALL_NAME}" >> $GITHUB_OUTPUT
+        id: tarball # Keep id in case needed later, though no outputs used now
+
+      # Upload only the versionless tar.gz bundle
+      - name: Upload build artifact (tar.gz)
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-linux-x86_64 # Fixed artifact name
+          # Reference step output
+          path: ${{ steps.tarball.outputs.tarball_path }}
+          if-no-files-found: error

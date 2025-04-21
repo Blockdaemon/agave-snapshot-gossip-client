@@ -18,13 +18,35 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-x86_64
+          name: build-output-linux-x86_64
           path: target/release
+
+      - name: Extract binary from tarball
+        working-directory: target/release
+        run: |
+          # Use fixed tarball name
+          TARBALL="${{ github.event.repository.name }}-linux-x86_64.tar.gz"
+          echo "Extracting from tarball: ${TARBALL}"
+
+          # List tarball contents to verify paths
+          echo "Listing contents of downloaded tarball:"
+          tar tzf "${TARBALL}"
+
+          # Extract binary using exact path, stripping the top-level dir
+          tar xzf "${TARBALL}" --strip-components=1 "${{ github.event.repository.name }}/bin/snapshot-gossip-client"
+          # Verify extraction
+          ls -l bin/snapshot-gossip-client
+
+          # Move extracted binary to the location expected by debian/rules
+          mv bin/snapshot-gossip-client .
+          echo "Moved binary to target/release/snapshot-gossip-client"
+          ls -l snapshot-gossip-client
 
       - name: Verify artifact exists
         run: |
+          # Check the final path after moving
           if [ ! -f "target/release/snapshot-gossip-client" ]; then
-            echo "Error: Build artifact not found"
+            echo "Error: Build artifact not found at expected location for deb build"
             exit 1
           fi
 
@@ -61,9 +83,9 @@ jobs:
           mkdir -p artifacts
           mv ../*.deb artifacts/
 
-      - name: Upload Debian package(s)
+      - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
           name: debian-packages
-          path: artifacts/agave-snapshot-gossip-client_${{ steps.changelog.outputs.PACKAGE_VERSION }}_amd64.deb
+          path: artifacts/*.deb
           if-no-files-found: error
