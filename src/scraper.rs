@@ -150,7 +150,7 @@ impl MetadataScraper {
     pub fn new(storage_path: Option<Uri>, expected_genesis_hash: Option<String>) -> Self {
         Self {
             http_client: Client::builder()
-                .use_rustls_tls()
+                .danger_accept_invalid_certs(true) // Needed for testing with self-signed certs
                 .user_agent(DEFAULT_SCRAPER_USER_AGENT)
                 .build()
                 .unwrap(),

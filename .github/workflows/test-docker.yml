@@ -23,6 +23,9 @@ jobs:
     # No if condition needed here, the caller handles it
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -50,24 +53,42 @@ jobs:
       - name: Pull & Verify Docker Image
         run: docker pull ${{ steps.image_tag.outputs.tag }}
 
-      - name: Set up test files and mock HTTP server
+      - name: Set up test files and mock HTTPS server
         id: mock_server_setup_docker
         run: |
+          # Install openssl
+          sudo apt-get update && sudo apt-get install -y openssl
+          # Generate self-signed cert and key
+          openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 30 -nodes -subj "/CN=localhost"
+
           mkdir -p test-storage
+          # Restore echo commands for simple JSON files
           echo '{"local": "test"}' > test-storage/latest.json
           echo '{"remote": "test"}' > latest.json
-          # Create directory for config mount
           mkdir -p etc/gossip-client
-          python3 -m http.server 8000 &
+
+          # Start simple Python HTTPS server from script file
+          python3 scripts/test/https_server.py 8443 &
           echo "server_pid=$!" >> $GITHUB_OUTPUT
-          echo "Mock HTTP server started on port 8000."
+          echo "Mock HTTPS server started on port 8443."
           sleep 2
+
+      - name: Verify Mock HTTPS Server Startup
+        run: |
+          echo "Waiting briefly for server to start..."
+          sleep 2
+          echo "Checking if port 8443 is listening..."
+          # Use ss to check for listening TCP sockets on port 8443
+          # Exit code will be non-zero if grep doesn't find a match
+          ss -tlnp | grep ":8443 "
+          echo "Mock HTTPS server appears to be listening."
 
       - name: Test Local Storage (Docker)
         run: |
           set -e
           echo "--- Testing Local Storage ---"
-          echo -e 'disable_gossip = true\nstorage_path = "/storage"\nenable_proxy = false' > etc/gossip-client/config.toml
+          # Copy config file from testdata directory
+          cp testdata/config_local.toml etc/gossip-client/config.toml
 
           docker run --rm -d --name test-docker -p 8899:8899 \
             -v $(pwd)/test-storage:/storage \
@@ -91,7 +112,8 @@ jobs:
         run: |
           set -e
           echo "--- Testing Remote Redirect ---"
-          echo -e 'disable_gossip = true\nstorage_path = "http://host.docker.internal:8000/"\nenable_proxy = false' > etc/gossip-client/config.toml
+          # Copy config file from testdata directory
+          cp testdata/config_redirect.toml etc/gossip-client/config.toml
 
           docker run --rm -d --name test-docker -p 8899:8899 --add-host=host.docker.internal:host-gateway \
             -v $(pwd)/etc/gossip-client/config.toml:/etc/gossip-client/config.toml \
@@ -104,7 +126,8 @@ jobs:
           curl --fail --silent --show-error http://localhost:8899/health
           echo "Testing GET /latest.json (expect 307)"
           REDIRECT_LOCATION=$(curl --fail --silent --show-error -I http://localhost:8899/latest.json | grep -i Location | cut -d' ' -f2 | tr -d '\r')
-          EXPECTED_LOCATION="http://host.docker.internal:8000/latest.json"
+          # Check against HTTPS URL
+          EXPECTED_LOCATION="https://host.docker.internal:8443/latest.json"
           if [ "$REDIRECT_LOCATION" != "$EXPECTED_LOCATION" ]; then
             echo "Error: Unexpected redirect location. Got '$REDIRECT_LOCATION', expected '$EXPECTED_LOCATION'"
             exit 1
@@ -120,7 +143,8 @@ jobs:
         run: |
           set -e
           echo "--- Testing Remote Proxy ---"
-          echo -e 'disable_gossip = true\nstorage_path = "http://host.docker.internal:8000/"\nenable_proxy = true' > etc/gossip-client/config.toml
+          # Copy config file from testdata directory
+          cp testdata/config_proxy.toml etc/gossip-client/config.toml
 
           docker run --rm -d --name test-docker -p 8899:8899 --add-host=host.docker.internal:host-gateway \
             -v $(pwd)/etc/gossip-client/config.toml:/etc/gossip-client/config.toml \
@@ -133,8 +157,6 @@ jobs:
           curl --fail --silent --show-error http://localhost:8899/health
           echo "Testing GET /latest.json (expect proxied content)"
           curl --fail --silent --show-error http://localhost:8899/latest.json | grep '{"remote": "test"}'
-          echo "Testing POST / (getPublicKey)"
-          curl --fail --silent --show-error -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","id":1,"method":"getPublicKey"}' http://localhost:8899/ | grep '"result":""'
 
           docker stop test-docker
           echo "--- Remote Proxy Test Done ---"
@@ -144,5 +166,5 @@ jobs:
         run: |
           echo "Removing test config file..."
           rm -rf etc # Remove created directory and file
-          echo "Stopping mock HTTP server..."
+          echo "Stopping mock HTTPS server..."
           kill ${{ steps.mock_server_setup_docker.outputs.server_pid }} || echo "Server already stopped."

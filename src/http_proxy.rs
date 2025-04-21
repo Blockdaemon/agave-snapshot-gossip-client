@@ -11,7 +11,7 @@ use crate::constants::SOLANA_VALIDATOR_USER_AGENT;
 // Create a proxy client with HTTPS support
 pub fn create_proxy_client() -> Client {
     reqwest::ClientBuilder::new()
-        .use_rustls_tls()
+        // .use_rustls_tls() // Removed - native-tls is now the default via Cargo.toml features
         .danger_accept_invalid_certs(true) // For development only
         .user_agent(SOLANA_VALIDATOR_USER_AGENT)
         .build()
