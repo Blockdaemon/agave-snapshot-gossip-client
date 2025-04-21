@@ -1,3 +1,16 @@
+agave-snapshot-gossip-client (0.1.8) unstable; urgency=medium
+
+  * Cosmetic: install.md
+  * CI: release does not need docker
+  * Refactor: Centralize state and simplify RPC service start/stop
+  * fix(#51): Add integration tests to CI/actions
+  * fix(#49): migrate from rustls to native_tls, add https to integration testing
+  * fix(#47): add short timeout for both scraper and http_proxy
+  * fix(#46): add peer count awareness to health endpoint
+  * fix(#31): document disable_gossip (RPC Only Mode)
+
+ -- Nye Liu <nye@blockdaemon.com>  Sun, 20 Apr 2025 23:16:59 -0700
+
 agave-snapshot-gossip-client (0.1.7) unstable; urgency=medium
 
   * fix(#39): Add sane RUST_LOG defaults to main.rs
