@@ -172,6 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = rpc::AppState {
         scraper,
         atomic_state: atomic_state.clone(),
+        disable_gossip: resolved.disable_gossip,
         enable_proxy: resolved.enable_proxy,
         serve_local,
     };

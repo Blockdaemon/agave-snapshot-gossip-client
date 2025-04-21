@@ -47,8 +47,11 @@ pub const SOLANA_VALIDATOR_USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
 pub const SCRAPER_CACHE_TTL_SECS: u64 = 5;
 pub const GOSSIP_CRDS_TTL_SECS: u64 = 15;
-pub const SCRAPER_REQUEST_TIMEOUT_SECS: u64 = 15; // 15 seconds
-pub const PROXY_REQUEST_TIMEOUT_SECS: u64 = 5; // 5 seconds
+
+pub const SCRAPER_REQUEST_TIMEOUT_SECS: u64 = 15;
+pub const PROXY_REQUEST_TIMEOUT_SECS: u64 = 5;
+
+pub const HEALTH_CHECK_MIN_GOSSIP_PEERS: usize = 2;
 
 // Static regex pattern for snapshot requests
 lazy_static! {

@@ -56,8 +56,8 @@ jobs:
       - name: Set up test files and mock HTTPS server
         id: mock_server_setup_docker
         run: |
-          # Install openssl
-          sudo apt-get update && sudo apt-get install -y openssl
+          # Install openssl and jq
+          sudo apt-get update && sudo apt-get install -y openssl jq
           # Generate self-signed cert and key
           openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 30 -nodes -subj "/CN=localhost"
 
@@ -99,7 +99,13 @@ jobs:
 
           # Test endpoints
           echo "Testing GET /health"
-          curl --fail --silent --show-error http://localhost:8899/health
+          HEALTH_OUTPUT=$(curl --fail --silent --show-error http://localhost:8899/health)
+          echo "$HEALTH_OUTPUT"
+          # Use jq to verify fields. -e exits >0 if assertion is false/null.
+          echo "$HEALTH_OUTPUT" | jq -e '.status == "ok"'
+          echo "$HEALTH_OUTPUT" | jq -e '.gossip_status == "disabled"'
+          echo "$HEALTH_OUTPUT" | jq -e '.gossip_peers == 0'
+
           echo "Testing GET /latest.json"
           curl --fail --silent --show-error http://localhost:8899/latest.json | grep '{"local": "test"}'
           echo "Testing POST / (getPublicKey)"
@@ -123,7 +129,12 @@ jobs:
 
           # Test endpoints
           echo "Testing GET /health"
-          curl --fail --silent --show-error http://localhost:8899/health
+          HEALTH_OUTPUT=$(curl --fail --silent --show-error http://localhost:8899/health)
+          echo "$HEALTH_OUTPUT"
+          echo "$HEALTH_OUTPUT" | jq -e '.status == "ok"'
+          echo "$HEALTH_OUTPUT" | jq -e '.gossip_status == "disabled"'
+          echo "$HEALTH_OUTPUT" | jq -e '.gossip_peers == 0'
+
           echo "Testing GET /latest.json (expect 307)"
           REDIRECT_LOCATION=$(curl --fail --silent --show-error -I http://localhost:8899/latest.json | grep -i Location | cut -d' ' -f2 | tr -d '\r')
           # Check against HTTPS URL
@@ -154,7 +165,12 @@ jobs:
 
           # Test endpoints
           echo "Testing GET /health"
-          curl --fail --silent --show-error http://localhost:8899/health
+          HEALTH_OUTPUT=$(curl --fail --silent --show-error http://localhost:8899/health)
+          echo "$HEALTH_OUTPUT"
+          echo "$HEALTH_OUTPUT" | jq -e '.status == "ok"'
+          echo "$HEALTH_OUTPUT" | jq -e '.gossip_status == "disabled"'
+          echo "$HEALTH_OUTPUT" | jq -e '.gossip_peers == 0'
+
           echo "Testing GET /latest.json (expect proxied content)"
           curl --fail --silent --show-error http://localhost:8899/latest.json | grep '{"remote": "test"}'
 

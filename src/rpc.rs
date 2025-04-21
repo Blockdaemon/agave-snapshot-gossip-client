@@ -69,6 +69,7 @@ fn jsonrpc_error(code: i32, message: &str, id: Option<Value>, status_code: Statu
 pub struct AppState {
     pub scraper: Arc<MetadataScraper>,
     pub atomic_state: AtomicState,
+    pub disable_gossip: bool,
     pub enable_proxy: bool,
     pub serve_local: bool,
 }
@@ -241,8 +242,7 @@ async fn handle_rpc_request(
             json!(state.atomic_state.get_shred_version())
         }
         "getPublicKey" => {
-            // Renamed method
-            json!(state.atomic_state.get_public_key()) // Updated call
+            json!(state.atomic_state.get_public_key())
         }
         _ => {
             return jsonrpc_error(-32601, "Method not found", id, StatusCode::BAD_REQUEST);
@@ -265,6 +265,10 @@ pub async fn start_rpc_service(
     let app = Router::new()
         .route("/", axum::routing::post(handle_rpc_request))
         .route("/{*path}", axum::routing::get(handle_get_request))
+        .route(
+            "/health",
+            axum::routing::get(healthcheck::health_check_handler()),
+        )
         .fallback(|req: Request<Body>| async move {
             // Handle non-GET/POST methods with 405
             let path = req.uri().path();
@@ -281,9 +285,6 @@ pub async fn start_rpc_service(
                 .unwrap()
         })
         .with_state(app_state);
-
-    // Add health check route
-    let app = healthcheck::add_health_check_route(app);
 
     // Create the TCP listener
     let listener = TcpListener::bind(addr).await?;
