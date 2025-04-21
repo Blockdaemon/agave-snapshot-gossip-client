@@ -13,6 +13,7 @@ This document outlines the key tradeoffs and considerations for the Solana Snaps
 ### Limitations
 - Increased gossip network load if existing snapshot providers remain in gossip that can be removed
 - Relying on external configuration when gossip is disabled (see [RPC-Only Mode](rpc-only-mode.md)).
+- Strategies to reduce resource usage by modifying gossip participation are discussed in [Optimization Notes](gossip_client_optimization_notes.md) and the [Light Gossip Mode Proposal](light_gossip_mode_proposal.md) (Ref: [Issue #53](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/53)).
 
 ## HTTP Protocol
 
