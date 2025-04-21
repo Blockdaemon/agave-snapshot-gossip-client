@@ -2,7 +2,7 @@
 
 **1. Problem Statement:**
 
-Nodes participating in the Solana gossip network that are *not* directly involved in consensus (primarily non-voting validators, but also RPC nodes and specialized clients like snapshot providers) currently incur significant CPU, memory, and bandwidth overhead. They process the full CRDS gossip stream, including data like `CrdsData::Vote`, which is essential for voting validators but largely constitutes noise for non-consensus nodes. This overhead hinders leaner infrastructure deployments and directly contributes to existing maintainer concerns regarding the excessive network impact and resource consumption of non-voting validators.
+Nodes participating in the Solana gossip network that are *not* directly involved in consensus (primarily non-voting validators, but also RPC nodes and specialized clients like snapshot providers) currently incur significant CPU, memory, and bandwidth overhead. They process the full CRDS gossip stream, including data like `CrdsData::Vote`, which is essential for voting validators but largely constitutes noise for non-consensus nodes. This overhead hinders leaner infrastructure deployments and directly contributes to existing maintainer concerns regarding the excessive network impact and resource consumption of non-voting validators. (See [Optimization Notes](gossip-client-optimization-notes.md) for further background on the resource usage issues.)
 
 **2. Proposed Solution:**
 
@@ -26,4 +26,4 @@ Introduce a new, **optional and configurable "Light Gossip Mode"** within the co
 
 **5. Next Steps:**
 
-Seeking feedback on the viability and design of this opt-in mode. We believe this offers a practical solution to reduce the resource footprint of non-voting validators and other non-consensus nodes, directly addressing expressed concerns without impacting core validator operation. We are prepared to develop this feature within a fork and submit a PR for consideration. 
+Seeking feedback on the viability and design of this opt-in mode. We believe this offers a practical solution to reduce the resource footprint of non-voting validators and other non-consensus nodes, directly addressing expressed concerns without impacting core validator operation. We are prepared to develop this feature within a fork and submit a PR for consideration.

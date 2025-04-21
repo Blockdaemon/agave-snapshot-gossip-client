@@ -1,7 +1,7 @@
 # Summary of Findings for `agave-snapshot-gossip-client` Optimization
 
 **Problem:**
-*   The client experiences excessive CPU and memory usage, likely due to processing the full Solana gossip firehose (Ref: GitHub Issue #53).
+*   The client experiences excessive CPU and memory usage, likely due to processing the full Solana gossip firehose (Ref: [GitHub Issue #53](https://github.com/Blockdaemon/agave-snapshot-gossip-client/issues/53)).
 *   The client receives far more data than it sends and processes data irrelevant to its core function of discovering/publishing snapshot hashes.
 
 **Goal:**
@@ -15,6 +15,8 @@
     *   Initial entrypoint communication.
 *   **Configurable Filtering of Other Ingress:** Implement logic to aggressively filter out and discard other incoming CRDS updates (specifically `CrdsData::Vote` initially, and potentially others like EpochSlots, DuplicateShreds, relayed data) *based on configuration*. This filtering should happen as early as possible upon receipt.
 *   **Configurable Disabling of Pull:** Implement logic to *disable* initiating gossip pulls and generating responses to pull requests *based on configuration*.
+
+*(This strategy is formalized in the [Light Gossip Mode Proposal](light-gossip-mode-proposal.md)).*
 
 **Implementation Approach:**
 *   **Requires Modifying Core Gossip Code via Forking:** Achieving this level of filtering and behaviour modification requires changing the internal logic of `solana-gossip`.
