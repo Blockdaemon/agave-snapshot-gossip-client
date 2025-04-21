@@ -10,10 +10,11 @@ use std::str::FromStr;
 use tokio::sync::RwLock;
 
 use crate::constants::{
-    DEFAULT_SCRAPER_CACHE_TTL_SECS, DEFAULT_SCRAPER_USER_AGENT, DEFAULT_SNAPSHOT_INFO_PATH,
+    SCRAPER_CACHE_TTL_SECS, SCRAPER_REQUEST_TIMEOUT_SECS, SCRAPER_USER_AGENT, SNAPSHOT_INFO_PATH,
 };
 
-const CACHE_DURATION: Duration = Duration::from_secs(DEFAULT_SCRAPER_CACHE_TTL_SECS);
+const CACHE_DURATION: Duration = Duration::from_secs(SCRAPER_CACHE_TTL_SECS);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(SCRAPER_REQUEST_TIMEOUT_SECS);
 
 #[derive(Debug)]
 pub enum ScraperError {
@@ -151,7 +152,8 @@ impl MetadataScraper {
         Self {
             http_client: Client::builder()
                 .danger_accept_invalid_certs(true) // Needed for testing with self-signed certs
-                .user_agent(DEFAULT_SCRAPER_USER_AGENT)
+                .user_agent(SCRAPER_USER_AGENT)
+                .timeout(REQUEST_TIMEOUT) // Add explicit request timeout
                 .build()
                 .unwrap(),
             storage_path,
@@ -206,10 +208,7 @@ impl MetadataScraper {
                 "Storage path is not configured".to_string(),
             ));
         }
-        let url = Self::join_urls(
-            self.storage_path.as_ref().unwrap(),
-            DEFAULT_SNAPSHOT_INFO_PATH,
-        )?;
+        let url = Self::join_urls(self.storage_path.as_ref().unwrap(), SNAPSHOT_INFO_PATH)?;
         debug!("Fetching snapshot info from {}", url);
 
         let uri = Uri::from_str(&url).map_err(|e| {

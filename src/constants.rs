@@ -40,13 +40,15 @@ pub const DEVNET_GENESIS_HASH: &str = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkr
 pub const TESTNET_GENESIS_HASH: &str = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY";
 pub const MAINNET_GENESIS_HASH: &str = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
 
-pub const DEFAULT_SNAPSHOT_INFO_PATH: &str = "latest.json";
+pub const SNAPSHOT_INFO_PATH: &str = "latest.json";
 // do not use commas in the user agent string, it causes problems with the mock server
-pub const DEFAULT_SCRAPER_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/91.0.4472.124 Safari/537.36";
+pub const SCRAPER_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/91.0.4472.124 Safari/537.36";
 pub const SOLANA_VALIDATOR_USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
-pub const DEFAULT_SCRAPER_CACHE_TTL_SECS: u64 = 5;
-pub const DEFAULT_GOSSIP_CRDS_TTL_SECS: u64 = 15;
+pub const SCRAPER_CACHE_TTL_SECS: u64 = 5;
+pub const GOSSIP_CRDS_TTL_SECS: u64 = 15;
+pub const SCRAPER_REQUEST_TIMEOUT_SECS: u64 = 15; // 15 seconds
+pub const PROXY_REQUEST_TIMEOUT_SECS: u64 = 5; // 5 seconds
 
 // Static regex pattern for snapshot requests
 lazy_static! {

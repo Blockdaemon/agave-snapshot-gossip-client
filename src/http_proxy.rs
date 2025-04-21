@@ -5,15 +5,18 @@ use axum::{
 };
 use log::{debug, warn};
 use reqwest::Client;
+use std::time::Duration;
 
-use crate::constants::SOLANA_VALIDATOR_USER_AGENT;
+use crate::constants::{PROXY_REQUEST_TIMEOUT_SECS, SOLANA_VALIDATOR_USER_AGENT};
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(PROXY_REQUEST_TIMEOUT_SECS);
 
 // Create a proxy client with HTTPS support
 pub fn create_proxy_client() -> Client {
     reqwest::ClientBuilder::new()
-        // .use_rustls_tls() // Removed - native-tls is now the default via Cargo.toml features
         .danger_accept_invalid_certs(true) // For development only
         .user_agent(SOLANA_VALIDATOR_USER_AGENT)
+        .timeout(REQUEST_TIMEOUT) // Add explicit request timeout
         .build()
         .expect("Failed to create HTTP client")
 }

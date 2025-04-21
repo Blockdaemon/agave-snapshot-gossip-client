@@ -21,7 +21,7 @@ use super::scraper::{MetadataScraper, SnapshotHashes};
 use crate::atomic_state::AtomicState;
 
 // Constants
-use crate::constants::DEFAULT_GOSSIP_CRDS_TTL_SECS;
+use crate::constants::GOSSIP_CRDS_TTL_SECS;
 const MIN_PEERS: usize = 2;
 
 macro_rules! decode_hash {
@@ -72,7 +72,7 @@ impl GossipMonitorState {
 
     fn should_push(&self, current_hashes: &SnapshotHashes) -> (bool, bool) {
         (
-            self.last_push.elapsed() > Duration::from_secs(DEFAULT_GOSSIP_CRDS_TTL_SECS - 2),
+            self.last_push.elapsed() > Duration::from_secs(GOSSIP_CRDS_TTL_SECS - 2),
             self.last_snapshot_hashes.as_ref() != Some(current_hashes),
         )
     }
@@ -195,7 +195,7 @@ impl GossipMonitor for Arc<ClusterInfo> {
                                 _ => (),
                             }
                             if let Err(e) = state.push_snapshot_hashes(self, snapshot_hashes) {
-                                error!("{}", e);
+                                error!("Failed to push snapshot hashes: {}", e);
                             }
                         }
                     }
