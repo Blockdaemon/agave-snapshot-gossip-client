@@ -20,8 +20,14 @@ Introduce a new, **optional and configurable "Light Gossip Mode"** within the co
 
 **4. Implementation Sketch:**
 
-*   Introduce configuration flags/parameters passed during `ClusterInfo`/`GossipService` initialization (e.g., `enable_light_gossip_mode: bool`, potentially `filter_ingress_types: Vec<CrdsDataType>`).
-*   Add conditional logic within key processing pathways (e.g., `ClusterInfo::process_gossip_packets`, `CrdsGossip` pull logic) to filter data or bypass steps based on the configured mode.
+*   Introduce an optional parameter during `ClusterInfo`/`GossipService` initialization to accept a filtering closure:
+    ```rust
+    incoming_filter: Option<Arc<dyn Fn(&CrdsData) -> bool + Send + Sync + 'static>>
+    ```
+*   Modify key processing pathways (e.g., where incoming `CrdsValue`s are handled before insertion or heavy processing) to check if the `incoming_filter` is `Some`.
+*   If a filter exists, execute it with the incoming `CrdsData`. If the closure returns `false`, discard the `CrdsValue` immediately.
+*   If the filter is `None` or returns `true`, proceed with the standard processing logic.
+*   (Optional) Similar optional closures or flags could be added to control pull request generation/response behavior if needed, passed during initialization.
 *   Ensure comprehensive testing verifies the light mode's functionality (especially for the non-voting validator use case) and the non-regression of the default validator mode.
 
 **5. Next Steps:**

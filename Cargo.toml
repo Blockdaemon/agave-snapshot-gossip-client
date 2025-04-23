@@ -17,10 +17,10 @@ path = "src/main.rs"
 
 [dependencies]
 # upstream solana dependencies
-solana-gossip = "~2"
-solana-sdk = "~2"
-solana-streamer = "~2"
-solana-version = "~2"
+solana-gossip = "~2.2"
+solana-sdk = "~2.2"
+solana-streamer = "~2.2"
+solana-version = "~2.2"
 
 # for rpc.rs, http_proxy.rs, and local_storage.rs
 bytes = "~1"
@@ -74,3 +74,7 @@ lto = true
 codegen-units = 1
 panic = 'abort'
 strip = true
+
+[patch.crates-io]
+solana-gossip = { path = "../agave/gossip" }
+solana-streamer = { path = "../agave/streamer" }

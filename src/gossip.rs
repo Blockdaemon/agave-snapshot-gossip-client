@@ -285,6 +285,34 @@ fn make_gossip_node(
 
     let cluster_info = ClusterInfo::new(node, Arc::new(keypair), SocketAddrSpace::Unspecified);
 
+    // Define the filter logic: Block types known to be unnecessary using `matches!`
+    let ingress_filter: Arc<
+        dyn Fn(&solana_gossip::crds_data::CrdsData) -> bool + Send + Sync + 'static,
+    > = Arc::new(|data| {
+        !matches!(
+            data,
+            // Blocked types (publicly matchable):
+            solana_gossip::crds_data::CrdsData::Vote(_, _) // High volume, consensus-related
+                | solana_gossip::crds_data::CrdsData::LowestSlot(_, _) // Validator catchup state
+                | solana_gossip::crds_data::CrdsData::EpochSlots(_, _) // Validator schedule info
+                | solana_gossip::crds_data::CrdsData::DuplicateShred(_, _) // Slashing detection
+                | solana_gossip::crds_data::CrdsData::RestartHeaviestFork(_) // Validator restart logic
+                | solana_gossip::crds_data::CrdsData::RestartLastVotedForkSlots(_) // Validator restart logic
+                                                                                   // Cannot explicitly block these due to private inner types, they will pass:
+                                                                                   // - Version
+                                                                                   // - AccountsHashes
+                                                                                   // - NodeInstance
+                                                                                   // - LegacyContactInfo, LegacySnapshotHashes, LegacyVersion
+        )
+        // Implicitly Allowed types passing this filter:
+        // - ContactInfo (Essential for peer discovery)
+        // - SnapshotHashes (Essential for client function)
+        // - Version, AccountsHashes, NodeInstance, Legacy* (Pass filter due to ! above or privacy)
+    });
+
+    // Set the filter on the ClusterInfo instance
+    cluster_info.set_ingress_filter(ingress_filter);
+
     // Add all entrypoints to the cluster info
     cluster_info.set_entrypoints(
         entrypoints
