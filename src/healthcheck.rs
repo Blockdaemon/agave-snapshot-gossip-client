@@ -47,8 +47,10 @@ pub fn health_check_handler() -> impl Handler<(), AppState> {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::sync::RwLock;
 
     use crate::atomic_state::AtomicState;
+    use crate::gossip_filter::ProtocolGossipMetrics;
     use crate::scraper::MetadataScraper;
     use axum::Router;
     use axum_test::TestServer;
@@ -67,6 +69,8 @@ mod tests {
             disable_gossip,
             enable_proxy,
             serve_local,
+            cluster_info: Arc::new(RwLock::new(None)),
+            protocol_metrics: Arc::new(ProtocolGossipMetrics::default()),
         }
     }
 

@@ -2,6 +2,7 @@ mod atomic_state;
 mod config;
 mod constants;
 mod gossip;
+mod gossip_filter;
 mod healthcheck;
 mod http_proxy;
 mod ip_echo;
@@ -14,6 +15,7 @@ mod upnp;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use anyhow::Result;
 use clap::Parser;
@@ -24,8 +26,10 @@ use log::{error, info, warn};
 // Our local crates
 use atomic_state::AtomicState;
 use gossip::start_gossip_client;
-use rpc::start_rpc_service;
+use gossip_filter::ProtocolGossipMetrics;
+use rpc::{start_rpc_service, AppState};
 use scraper::MetadataScraper;
+use solana_gossip::cluster_info::ClusterInfo;
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, disable_version_flag = true)]
@@ -150,16 +154,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|uri| uri.scheme_str() == Some("file"))
         .unwrap_or(false);
 
+    // Variable to hold ClusterInfo if gossip is enabled
+    let mut cluster_info_instance: Option<Arc<ClusterInfo>> = None;
+    // Initialize the unified metrics Arc directly
+    let mut protocol_metrics = Arc::new(ProtocolGossipMetrics::default());
+
+    // Initialize app state (using the default metrics initially)
+    let mut app_state = AppState {
+        scraper: scraper.clone(),
+        atomic_state: atomic_state.clone(),
+        disable_gossip: resolved.disable_gossip,
+        enable_proxy: resolved.enable_proxy,
+        serve_local,
+        cluster_info: Arc::new(RwLock::new(None)),
+        protocol_metrics: protocol_metrics.clone(), // Use the initialized metrics
+    };
+
     // start gossip client if enabled
     let gossip_handles = if !resolved.disable_gossip {
-        // Start gossip client
-        let (monitor_handle, gossip_handle) = start_gossip_client(
+        // Capture the 4 returned values, including the unified metrics
+        let (monitor_handle, gossip_handle, cluster_info, pm) = start_gossip_client(
             &resolved,
             scraper.clone(),
             atomic_state.clone(),
-            exit.clone(), // Pass original exit clone
+            exit.clone(),
         )
         .await?;
+        cluster_info_instance = Some(cluster_info);
+        // Overwrite metrics with the ones from the gossip client
+        protocol_metrics = pm;
         Some((monitor_handle, gossip_handle))
     } else {
         warn!("Gossip disabled, not starting gossip client");
@@ -168,14 +191,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    // Create AppState directly
-    let app_state = rpc::AppState {
-        scraper,
-        atomic_state: atomic_state.clone(),
-        disable_gossip: resolved.disable_gossip,
-        enable_proxy: resolved.enable_proxy,
-        serve_local,
-    };
+    // Update app state with cluster_info
+    if let Some(cluster_info) = &cluster_info_instance {
+        let mut cluster_info_lock = app_state.cluster_info.write().unwrap();
+        *cluster_info_lock = Some(cluster_info.clone());
+    }
+
+    // Update AppState with the *final* metrics (either default or from gossip)
+    app_state.protocol_metrics = protocol_metrics;
 
     // Start RPC service task
     let rpc_listen = SocketAddr::new(resolved.listen_ip, resolved.rpc_port);

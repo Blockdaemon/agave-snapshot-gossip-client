@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use solana_gossip::gossip_service::GossipService;
+use solana_gossip::protocol::{FilterableCrdsDataType, FilterableProtocolType};
 use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
@@ -16,12 +17,16 @@ use solana_streamer::socket::SocketAddrSpace;
 
 // Our local crates
 use super::config::ResolvedConfig;
+use super::gossip_filter::{
+    count_protocol_message, filter_protocol_message, GossipFilterMode, ProtocolGossipMetrics,
+};
 use super::ip_echo;
 use super::scraper::{MetadataScraper, SnapshotHashes};
 use crate::atomic_state::AtomicState;
 
 // Constants
 use crate::constants::GOSSIP_CRDS_TTL_SECS;
+
 const MIN_PEERS: usize = 2;
 
 macro_rules! decode_hash {
@@ -213,6 +218,8 @@ impl GossipMonitor for Arc<ClusterInfo> {
 /// Different parameters:
 /// * Entrypoints vector instead of a single entrypoint
 /// * rpc_addr/rpc_pubsub_addr to add explicitly to ContactInfo
+/// * shred_version: Option<u16> to add to ContactInfo
+/// * protocol_metrics: Arc<ProtocolGossipMetrics> containing all counters
 fn make_gossip_node(
     keypair: Keypair,
     entrypoints: Vec<SocketAddr>,
@@ -221,6 +228,7 @@ fn make_gossip_node(
     rpc_addr: Option<&SocketAddr>,
     rpc_pubsub_addr: Option<&SocketAddr>,
     shred_version: Option<u16>,
+    protocol_metrics: Arc<ProtocolGossipMetrics>,
 ) -> (GossipService, Arc<ClusterInfo>) {
     let (node, gossip_socket, ip_echo) = {
         if shred_version.is_none() {
@@ -285,33 +293,34 @@ fn make_gossip_node(
 
     let cluster_info = ClusterInfo::new(node, Arc::new(keypair), SocketAddrSpace::Unspecified);
 
-    // Define the filter logic: Block types known to be unnecessary using `matches!`
+    // Define the filter logic using the new public enums
     let ingress_filter: Arc<
-        dyn Fn(&solana_gossip::crds_data::CrdsData) -> bool + Send + Sync + 'static,
-    > = Arc::new(|data| {
-        !matches!(
-            data,
-            // Blocked types (publicly matchable):
-            solana_gossip::crds_data::CrdsData::Vote(_, _) // High volume, consensus-related
-                | solana_gossip::crds_data::CrdsData::LowestSlot(_, _) // Validator catchup state
-                | solana_gossip::crds_data::CrdsData::EpochSlots(_, _) // Validator schedule info
-                | solana_gossip::crds_data::CrdsData::DuplicateShred(_, _) // Slashing detection
-                | solana_gossip::crds_data::CrdsData::RestartHeaviestFork(_) // Validator restart logic
-                | solana_gossip::crds_data::CrdsData::RestartLastVotedForkSlots(_) // Validator restart logic
-                                                                                   // Cannot explicitly block these due to private inner types, they will pass:
-                                                                                   // - Version
-                                                                                   // - AccountsHashes
-                                                                                   // - NodeInstance
-                                                                                   // - LegacyContactInfo, LegacySnapshotHashes, LegacyVersion
-        )
-        // Implicitly Allowed types passing this filter:
-        // - ContactInfo (Essential for peer discovery)
-        // - SnapshotHashes (Essential for client function)
-        // - Version, AccountsHashes, NodeInstance, Legacy* (Pass filter due to ! above or privacy)
+        dyn Fn(FilterableProtocolType, Option<&[FilterableCrdsDataType]>) -> bool
+            + Send
+            + Sync
+            + 'static,
+    > = Arc::new(move |protocol_type, data_types| {
+        // --- Metrics Counting (Always run before filtering) ---
+        let metrics = protocol_metrics.clone();
+        count_protocol_message(&metrics, protocol_type, data_types);
+
+        // --- Filtering Logic --- //
+        // Hardcode the mode for now. Could be passed in or read from config.
+        let filter_mode = GossipFilterMode::Entrypoint;
+        let should_keep = filter_protocol_message(filter_mode, protocol_type, data_types);
+
+        // Increment filter count if message is discarded
+        if !should_keep {
+            metrics
+                .ingress_filtered_count
+                .fetch_add(1, Ordering::Relaxed);
+        }
+
+        should_keep // Return the filtering decision
     });
 
-    // Set the filter on the ClusterInfo instance
-    cluster_info.set_ingress_filter(ingress_filter);
+    // Set the ingress filter
+    cluster_info.set_ingress_filter(ingress_filter); // Pass the observer with the new signature
 
     // Add all entrypoints to the cluster info
     cluster_info.set_entrypoints(
@@ -365,9 +374,17 @@ pub async fn start_gossip_client(
     scraper: Arc<MetadataScraper>,
     atomic_state: AtomicState,
     exit: Arc<AtomicBool>,
-) -> Result<(tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)> {
+) -> Result<(
+    tokio::task::JoinHandle<()>, // monitor handle
+    tokio::task::JoinHandle<()>, // gossip handle
+    Arc<ClusterInfo>,            // ClusterInfo instance
+    Arc<ProtocolGossipMetrics>,
+)> {
     // Use the helper function to read the keypair
     let node_keypair = read_node_keypair(&resolved.keypair_path)?;
+    // Create the single hierarchical metrics holder
+    let protocol_metrics = Arc::new(ProtocolGossipMetrics::default());
+
     // Set the pubkey in the shared state now that we have read the keypair
     let pubkey_str = node_keypair.pubkey().to_string();
     info!("Our pubkey: {}", pubkey_str); // Log pubkey here
@@ -389,17 +406,21 @@ pub async fn start_gossip_client(
         Some(rpc_addr),        // public_ip:rpc_port
         Some(rpc_pubsub_addr), // public_ip:rpc_port+1
         resolved.shred_version,
+        protocol_metrics.clone(), // Pass the single metrics Arc
     );
     info!("Started gossip service");
 
+    // Clone cluster_info for the monitor task BEFORE moving the original into gossip_service
+    let cluster_info_for_monitor = cluster_info.clone();
+
     info!("Starting monitor service...");
     let monitor_handle = tokio::spawn({
-        let cluster_info = cluster_info.clone();
+        // let cluster_info = cluster_info.clone(); // Already cloned above
         let scraper = scraper.clone();
         let atomic_state_clone = atomic_state.clone(); // Clone for the closure
         let exit_clone = exit.clone(); // Clone exit for the closure
         async move {
-            cluster_info
+            cluster_info_for_monitor
                 .monitor_gossip(scraper, atomic_state_clone, exit_clone)
                 .await;
         }
@@ -410,7 +431,12 @@ pub async fn start_gossip_client(
         gossip_service.join().unwrap();
     });
 
-    Ok((monitor_handle, gossip_handle))
+    Ok((
+        monitor_handle,
+        gossip_handle,
+        cluster_info,
+        protocol_metrics, // Return the single metrics Arc
+    ))
 }
 
 #[cfg(test)]

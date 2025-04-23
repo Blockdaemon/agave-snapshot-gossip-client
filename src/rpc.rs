@@ -1,6 +1,8 @@
+// use std::collections::HashMap; // Removed unused import
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use anyhow::Result;
 use axum::{
@@ -13,11 +15,13 @@ use axum::{
 use log::{error, info, warn};
 use serde::Serialize;
 use serde_json::{json, Value};
+use solana_gossip::cluster_info::ClusterInfo;
 use tokio::net::TcpListener;
 
 // Our local crates
 use crate::atomic_state::AtomicState;
 use crate::constants::SNAPSHOT_REGEX;
+use crate::gossip_filter::ProtocolGossipMetrics;
 use crate::healthcheck;
 use crate::http_proxy;
 use crate::local_storage;
@@ -72,6 +76,8 @@ pub struct AppState {
     pub disable_gossip: bool,
     pub enable_proxy: bool,
     pub serve_local: bool,
+    pub cluster_info: Arc<RwLock<Option<Arc<ClusterInfo>>>>,
+    pub protocol_metrics: Arc<ProtocolGossipMetrics>,
 }
 
 // Removed RpcServer struct
@@ -166,6 +172,44 @@ async fn handle_snapshot_request(
     }
 }
 
+// NEW: Handler function for getProtocolMetrics
+async fn rpc_get_protocol_metrics(state: &AppState) -> Result<Value, String> {
+    // Access the unified metrics directly
+    let metrics_json = build_structured_metrics(&state.protocol_metrics);
+    Ok(metrics_json)
+}
+
+// NEW: Helper function to build the structured metrics JSON
+fn build_structured_metrics(metrics: &ProtocolGossipMetrics) -> Value {
+    // Helper function to build JSON for nested CrdsMetrics
+    let build_crds_metrics_json = |crds_metrics: &crate::gossip_filter::CrdsMetrics| -> Value {
+        json!({
+            "total_messages_count": crds_metrics.total_messages_count.load(Ordering::Relaxed),
+            "contact_info_count": crds_metrics.contact_info_count.load(Ordering::Relaxed),
+            "vote_count": crds_metrics.vote_count.load(Ordering::Relaxed),
+            "lowest_slot_count": crds_metrics.lowest_slot_count.load(Ordering::Relaxed),
+            "snapshot_hashes_count": crds_metrics.snapshot_hashes_count.load(Ordering::Relaxed),
+            "epoch_slots_count": crds_metrics.epoch_slots_count.load(Ordering::Relaxed),
+            "duplicate_shred_count": crds_metrics.duplicate_shred_count.load(Ordering::Relaxed),
+            "restart_last_voted_fork_slots_count": crds_metrics.restart_last_voted_fork_slots_count.load(Ordering::Relaxed),
+            "restart_heaviest_fork_count": crds_metrics.restart_heaviest_fork_count.load(Ordering::Relaxed),
+            "other_count": crds_metrics.other_count.load(Ordering::Relaxed),
+        })
+    };
+
+    // Build the main JSON structure
+    json!({
+        "ingress_filter_calls_count": metrics.ingress_filter_calls_count.load(Ordering::Relaxed),
+        "ingress_filtered_count": metrics.ingress_filtered_count.load(Ordering::Relaxed),
+        "pull_request_count": metrics.pull_request_count.load(Ordering::Relaxed),
+        "prune_message_count": metrics.prune_message_count.load(Ordering::Relaxed),
+        "ping_count": metrics.ping_count.load(Ordering::Relaxed),
+        "pong_count": metrics.pong_count.load(Ordering::Relaxed),
+        "pull_response_metrics": build_crds_metrics_json(&metrics.pull_response_metrics),
+        "push_message_metrics": build_crds_metrics_json(&metrics.push_message_metrics),
+    })
+}
+
 /// Handles incoming JSON-RPC requests (POST only).
 async fn handle_rpc_request(
     State(state): State<AppState>,
@@ -244,12 +288,22 @@ async fn handle_rpc_request(
         "getPublicKey" => {
             json!(state.atomic_state.get_public_key())
         }
+        "getProtocolMetrics" => match rpc_get_protocol_metrics(&state).await {
+            Ok(metrics_json) => metrics_json,
+            Err(err_msg) => {
+                warn!(
+                    "Failed to get protocol metrics: {}. Returning null.",
+                    err_msg
+                );
+                Value::Null
+            }
+        },
         _ => {
             return jsonrpc_error(-32601, "Method not found", id, StatusCode::BAD_REQUEST);
         }
     };
 
-    // Return the JSON-RPC response
+    // Success/Warning Case: Wrap the result Value (could be actual data or Null)
     jsonrpc_response(result, id, StatusCode::OK)
 }
 
