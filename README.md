@@ -7,6 +7,8 @@ The SSDN Gossip Client is part of a solution to decouple snapshot serving from v
 ## Problem Statement
 
 Current snapshot distribution has several limitations:
+- Everyone (generally) uses the same 4 recommended KVs from [the recommended command lines](https://docs.anza.xyz/clusters/available), effectively centralizing the network
+- Those same validators stop serving snapshots effectively once there is more than 2 or 3 concurrent requests
 - Existing validators and RPC providers are overwhelmed with snapshot requests, and they are limited in number due to the added performance overhead
 - Snapshot serving impacts critical validator operations
 - Snapshot serving impacts critical RPC provider operations
