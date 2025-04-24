@@ -1,3 +1,14 @@
+agave-snapshot-gossip-client (0.1.8-v2.2) unstable; urgency=medium
+
+  * docs(#53): Document plan for gossip high resource usage mitigation
+  * docs(#53): link docs together
+  * Add comment about known validator centralization
+  * Allow prepare release on non-default branch if --dry-run
+  * fix(#53): add MemoryMax=16G to systemd unit file
+  * Patch to upstream v2.2 branch
+
+ -- Nye Liu <nye@blockdaemon.com>  Thu, 24 Apr 2025 23:46:00 -0700
+
 agave-snapshot-gossip-client (0.1.8) unstable; urgency=medium
 
   * Cosmetic: install.md

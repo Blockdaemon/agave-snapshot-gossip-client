@@ -1,6 +1,6 @@
 [package]
 name = "agave-snapshot-gossip-client"
-version = "0.1.8"
+version = "0.1.8-v2.2"
 edition = "2021"
 authors = ["Blockdaemon", "Nye Liu"]
 description = "Snapshot gossip client"
@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 # upstream solana dependencies
-solana-gossip = "~2"
+solana-gossip = { version= "*", git = "https://github.com/Blockdaemon/agave", branch = "v2.2" }
 solana-sdk = "~2"
 solana-streamer = "~2"
 solana-version = "~2"
@@ -74,3 +74,7 @@ lto = true
 codegen-units = 1
 panic = 'abort'
 strip = true
+
+[patch.crates-io]
+# ClusterInfo::new() requires solana_streamer::socket::SocketAddrSpace;
+solana-streamer = { git = "https://github.com/Blockdaemon/agave", branch = "v2.2" }
