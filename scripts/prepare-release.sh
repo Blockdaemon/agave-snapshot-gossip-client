@@ -44,7 +44,7 @@ CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
 DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
 
 # Check if we're on the default branch
-if [ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
+if [ "$DRY_RUN" != true -a "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
     echo "Error: Must be on the default branch ($DEFAULT_BRANCH) to prepare a release"
     exit 1
 fi
