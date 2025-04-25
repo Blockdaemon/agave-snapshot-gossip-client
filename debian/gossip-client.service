@@ -9,6 +9,7 @@ Group=gossip-client
 ExecStart=/usr/sbin/snapshot-gossip-client -c /etc/gossip-client/config.toml
 Restart=always
 RestartSec=3
+MemoryMax=16G
 
 [Install]
 WantedBy=multi-user.target
