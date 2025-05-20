@@ -10,8 +10,9 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 use solana_gossip::gossip_service::GossipService;
 use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{read_keypair_file, Keypair, Signer};
+use solana_hash::Hash;
+use solana_keypair::{read_keypair_file, Keypair};
+use solana_signer::Signer;
 use solana_streamer::socket::SocketAddrSpace;
 
 // Our local crates
