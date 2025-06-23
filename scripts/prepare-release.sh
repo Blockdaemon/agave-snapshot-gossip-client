@@ -111,7 +111,7 @@ update_changelog
 
 # Commit the version updates
 run_git_cmd "git add Cargo.toml Cargo.lock debian/changelog"
-run_git_cmd "git commit -m \"Bump version to ${VERSION}\" || true"
+run_git_cmd "git commit -m \"Bump version to ${VERSION}\" -S || true"
 run_git_cmd "git tag -a \"${TAG}\" -m \"Release ${TAG}\""
 
 if [ "$DRY_RUN" = true ]; then
