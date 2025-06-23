@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "agave-snapshot-gossip-client"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "agave-snapshot-gossip-client",
  "anyhow",

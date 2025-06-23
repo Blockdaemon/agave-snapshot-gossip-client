@@ -1,3 +1,37 @@
+agave-snapshot-gossip-client (0.1.9) unstable; urgency=medium
+
+  * docs(#53): Document plan for gossip high resource usage mitigation
+  * docs(#53): link docs together
+  * Add comment about known validator centralization
+  * Allow prepare release on non-default branch if --dry-run
+  * fix(#53): add MemoryMax=16G to systemd unit file
+  * cargo(deps): bump tokio-util from 0.7.14 to 0.7.15
+  * cargo(deps): bump chrono from 0.4.40 to 0.4.41
+  * cargo(deps): bump axum from 0.8.3 to 0.8.4
+  * cargo(deps): bump toml from 0.8.20 to 0.8.22
+  * Merge pull request #57 from Blockdaemon/dependabot/cargo/tokio-util-0.7.15
+  * Merge pull request #60 from Blockdaemon/dependabot/cargo/chrono-0.4.41
+  * Merge pull request #61 from Blockdaemon/dependabot/cargo/axum-0.8.4
+  * Merge pull request #62 from Blockdaemon/dependabot/cargo/toml-0.8.22
+  * Stop using solana-sdk
+  * cargo(deps): bump tokio from 1.45.0 to 1.45.1
+  * Merge pull request #63 from Blockdaemon/dependabot/cargo/tokio-1.45.1
+  * cargo(deps): bump clap from 4.5.38 to 4.5.39
+  * cargo(deps): bump reqwest from 0.12.15 to 0.12.18
+  * Merge pull request #64 from Blockdaemon/dependabot/cargo/clap-4.5.39
+  * Merge pull request #65 from Blockdaemon/dependabot/cargo/reqwest-0.12.18
+  * cargo(deps): bump toml from 0.8.22 to 0.8.23
+  * cargo(deps): bump reqwest from 0.12.18 to 0.12.19
+  * Merge pull request #66 from Blockdaemon/dependabot/cargo/toml-0.8.23
+  * Merge pull request #67 from Blockdaemon/dependabot/cargo/reqwest-0.12.19
+  * cargo(deps): bump clap from 4.5.39 to 4.5.40
+  * cargo(deps): bump reqwest from 0.12.19 to 0.12.20
+  * Merge pull request #68 from Blockdaemon/dependabot/cargo/clap-4.5.40
+  * Merge pull request #69 from Blockdaemon/dependabot/cargo/reqwest-0.12.20
+  * Agave 2.3.1
+
+ -- Nye Liu <nye@blockdaemon.com>  Sun, 22 Jun 2025 21:44:14 -0700
+
 agave-snapshot-gossip-client (0.1.8) unstable; urgency=medium
 
   * Cosmetic: install.md
