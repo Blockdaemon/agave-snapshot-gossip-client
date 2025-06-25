@@ -349,7 +349,6 @@ pub async fn start_gossip_client(
     // Start gossip service
     let gossip_addr = &SocketAddr::new(resolved.public_ip, resolved.gossip_port); // public_ip advertised, port portion is used with hard coded UNSPECIFIED listen IP
     let rpc_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port);
-    let rpc_pubsub_addr = &SocketAddr::new(resolved.public_ip, resolved.rpc_port + 1);
     info!(
         "Starting gossip service, reporting gossip {:?}, RPC {:?}",
         gossip_addr, rpc_addr
@@ -359,8 +358,8 @@ pub async fn start_gossip_client(
         resolved.entrypoints.clone(),
         exit.clone(),
         gossip_addr,
-        Some(rpc_addr),        // public_ip:rpc_port
-        Some(rpc_pubsub_addr), // public_ip:rpc_port+1
+        Some(rpc_addr), // public_ip:rpc_port
+        None,           // no rpc_pubsub_addr
         resolved.shred_version,
     );
     info!("Started gossip service");

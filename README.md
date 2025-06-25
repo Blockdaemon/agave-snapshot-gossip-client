@@ -116,12 +116,13 @@ the network. If not specified, no checking will be done.
 
 See [Solana Cluster Information](https://docs.anza.xyz/clusters/available) for the correct values.
 
-### Hardware Requirements (gossip enabled, testnet)
-- 8GB to 16GB RAM
-- 4 CPU Cores
+### Hardware Requirements (gossip enabled, mainnet)
+- 4GB to 8GB RAM
+- 4 to 8 CPU Cores
 
 ### Network Requirements
-- 200Mbps to 300Mbps connection
+- 100Mbps to 200Mbps connection
+- 50Mbps sustained bi-directional bandwidth (16TB per month)
 - Static public IP address
 - Ingress allow/forward list:
   - TCP/UDP port 8001 (gossip) - if you need to be a publicly reachable gossip entrypoint (optional)
