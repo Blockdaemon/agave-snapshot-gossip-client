@@ -117,12 +117,8 @@ async fn handle_snapshot_request(
 ) -> impl IntoResponse {
     let path = req.uri().path().to_string();
     let peer_ip = get_client_ip(&req);
-    info!(
-        "{} request from {} for path: {}",
-        req.method(),
-        peer_ip,
-        path
-    );
+    let method = req.method();
+    info!("{} request from {} for path: {}", method, peer_ip, path);
 
     let uri = match Uri::builder().path_and_query(&path).build() {
         Ok(uri) => uri,
@@ -137,10 +133,12 @@ async fn handle_snapshot_request(
             if state.serve_local {
                 info!("Serving local file for {}: {}", peer_ip, path);
                 let local_path = state.scraper.storage_path().unwrap().path().to_string();
-                // Use the local_storage module to serve the file
+
+                // Use the local_storage module to serve the file (handles both GET and HEAD)
                 local_storage::LocalStorage::handle_request(
                     State(local_storage::LocalStorage::new(local_path)),
                     Path(path),
+                    method.clone(),
                 )
                 .await
                 .into_response()
