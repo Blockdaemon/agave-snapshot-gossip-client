@@ -2,6 +2,10 @@
 #
 # See /usr/share/doc/agave-snapshot-gossip-client/example-config.toml
 #
+
+# Default is testnet
+#network = testnet
+
 # If this file is not present, we will generate a new one every time we are run.
 keypair_path = "/etc/gossip-client/keypair.json"
 
