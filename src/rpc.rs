@@ -78,13 +78,20 @@ pub struct AppState {
 
 // -- Standalone Handler Functions --
 
-/// Routes GET requests based on the path (snapshots or 404).
+/// Routes GET and HEAD requests based on the path (snapshots or 404).
 async fn handle_get_request(State(state): State<AppState>, req: Request<Body>) -> Response {
     let client_ip = get_client_ip(&req);
     let user_agent = get_user_agent(&req);
+    let method = req.method().as_str();
+
+    // Only handle GET and HEAD requests
+    if req.method() != Method::GET && req.method() != Method::HEAD {
+        return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed\n").into_response();
+    }
+
     info!(
-        "GET request from {} with user agent: {}",
-        client_ip, user_agent
+        "{} request from {} with user agent: {}",
+        method, client_ip, user_agent
     );
 
     let path = req.uri().path();
@@ -96,8 +103,8 @@ async fn handle_get_request(State(state): State<AppState>, req: Request<Body>) -
     } else {
         let peer_ip = get_client_ip(&req);
         warn!(
-            "Returning 404 for non-matching GET request: {} from {}",
-            path, peer_ip
+            "Returning 404 for non-matching {} request: {} from {}",
+            method, path, peer_ip
         );
         (StatusCode::NOT_FOUND, "Not Found\n").into_response()
     }
@@ -265,6 +272,7 @@ pub async fn start_rpc_service(
     let app = Router::new()
         .route("/", axum::routing::post(handle_rpc_request))
         .route("/{*path}", axum::routing::get(handle_get_request))
+        .route("/{*path}", axum::routing::head(handle_get_request))
         .route(
             "/health",
             axum::routing::get(healthcheck::health_check_handler()),
