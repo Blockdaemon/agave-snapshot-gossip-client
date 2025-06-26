@@ -1,7 +1,12 @@
 # Example config.toml
+# See debian/default-config.toml for a minimal example
+# See src/constants.rs for complete set of defaults
 
-# Optional: Network to connect to (devnet, testnet, or mainnet)
-# If not specified, will use testnet
+# 
+# NETWORK CONFIGURATION
+#
+
+# Required: Network to connect to - devnet, testnet, or mainnet (default: "testnet")
 #network = "testnet"
 
 # Optional: Custom entrypoints (overrides network selection)
@@ -13,34 +18,33 @@
 #    "entrypoint5.devnet.solana.com:8001",
 #]
 
-# Optional: Shred version (default: None)
-# While optional, it is highly recommended to provide it.
-#shred_version = 2405 (devnet)
-#shred_version = 64475 (testnet)
+# Optional: Shred version (default: None - detect from entrypoints)
+#shred_version = 2405  # devnet
+#shred_version = 64475 # testnet
+#shred_version = 50093 # mainnet
 
-# Optional: Genesis hash (default: None)
+# Optional: Genesis hash (default: None - use default)
 #expected_genesis_hash = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY" # testnet
 #expected_genesis_hash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" # devnet
+#exptcted_genesis_hash = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" # mainnet
 
-# Optional: Path to keypair file (default: keypair.json)
+# Optional: Path to keypair file (default: "keypair.json")
+# If not supplied, will generate a one time use key (not persistent!)
 #keypair_path = "my-keypair.json"
 
-# Optional: listen address for RPC  (default: 0.0.0.0)
-# Gossip is hardcoded to 0.0.0.0 and can't be changed.
+# Required: Whether to disable the gossip client. If true, only the RPC server will be started (default: false)
+disable_gossip = false
+
+# 
+# LISTEN/ADVERTISE CONFIGURATION
+#
+
+# Optional: Listen address for RPC  (default: "0.0.0.0")
+# Gossip listen address is hardcoded to 0.0.0.0 and can't be changed.
 #listen_ip = "127.0.0.1"
 
-# Optional: Public IP address (default: use STUN if enabled, otherwise ip_echo to each entrypoint)
+# Optional: Advertised public IP address (default: use STUN if enabled, otherwise ip_echo to each entrypoint)
 #public_ip = "1.2.3.4"
-
-# Optional: Enable STUN (default: false)
-# By default, use ip_echo and not STUN
-#enable_stun = true
-
-# Optional: STUN server (default: stun.l.google.com:3478)
-#stun_server = "1.2.3.4:3478"
-
-# Optional: Whether to disable the gossip client. If true, only the RPC server will be started (default: false)
-#disable_gossip = true
 
 # Optional: Gossip listen and advertised port (default: 8001)
 #gossip_port = 8001
@@ -48,10 +52,21 @@
 # Optional: RPC listen and advertised port (default: 8899)
 #rpc_port = 8899
 
+# Optional: Enable STUN (default: false)
+# By default, use ip_echo and not STUN
+#enable_stun = true
+
+# Optional: STUN server (default: "stun.l.google.com:3478")
+#stun_server = "1.2.3.4:3478"
+
 # Optional: Enable upnp (default: false)
 #enable_upnp = true
 
-# Where to redirect or proxy HTTP GET requests to (default: Do not redirect or proxy)
+# 
+# STORAGE/PROXY CONFIGURATION
+#
+
+# Required: Where to redirect or proxy HTTP GET requests to (default: Do not redirect or proxy)
 storage_path = "https://your-storage-server.com"
 # or
 #storage_path = "https://your-storage-server.com/path/"
