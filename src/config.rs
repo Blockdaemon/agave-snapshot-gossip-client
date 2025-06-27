@@ -177,6 +177,51 @@ impl Config {
         }
     }
 
+    pub fn resolve_storage_path(&self) -> Result<Option<Uri>, ConfigError> {
+        let storage_path = Some(
+            self.storage_path
+                .as_deref()
+                .map(|s| {
+                    // Try to parse as URI first to check if it has a valid scheme
+                    if let Ok(uri) = Uri::from_str(s) {
+                        if uri.scheme_str().is_some() {
+                            // If it's already a valid URI with a scheme, use it as-is
+                            return s.to_string();
+                        }
+                    }
+
+                    if s.starts_with('/') {
+                        // If it's an absolute path, convert to file URI
+                        format!("file://localhost{}", s)
+                    } else {
+                        // If it's a relative path, join with current dir and convert to file URI
+                        let path = std::env::current_dir()
+                            .unwrap()
+                            .join(s)
+                            .to_string_lossy()
+                            .to_string();
+                        format!("file://localhost{}", path)
+                    }
+                })
+                .unwrap_or_else(|| {
+                    // Default to "storage" in current directory
+                    let path = std::env::current_dir()
+                        .unwrap()
+                        .join("storage")
+                        .to_string_lossy()
+                        .to_string();
+                    format!("file://localhost{}", path)
+                }),
+        );
+        storage_path
+            .map(|s| {
+                Uri::from_str(&s).map_err(|e| {
+                    ConfigError::ParseError(format!("Invalid storage path URL: {}", e))
+                })
+            })
+            .transpose()
+    }
+
     pub async fn resolve(&self) -> Result<ResolvedConfig, ConfigError> {
         // Resolve entrypoints first since we need them for both IP echo and final config
         let mut resolved_entrypoints = Vec::new();
@@ -287,48 +332,7 @@ impl Config {
             (_, configured) => configured,
         };
 
-        let storage_path = Some(
-            self.storage_path
-                .as_deref()
-                .map(|s| {
-                    // Try to parse as URI first to check if it has a valid scheme
-                    if let Ok(uri) = Uri::from_str(s) {
-                        if uri.scheme_str().is_some() {
-                            // If it's already a valid URI with a scheme, use it as-is
-                            return s.to_string();
-                        }
-                    }
-
-                    if s.starts_with('/') {
-                        // If it's an absolute path, convert to file URI
-                        format!("file://localhost{}", s)
-                    } else {
-                        // If it's a relative path, join with current dir and convert to file URI
-                        let path = std::env::current_dir()
-                            .unwrap()
-                            .join(s)
-                            .to_string_lossy()
-                            .to_string();
-                        format!("file://localhost{}", path)
-                    }
-                })
-                .unwrap_or_else(|| {
-                    // Default to "storage" in current directory
-                    let path = std::env::current_dir()
-                        .unwrap()
-                        .join("storage")
-                        .to_string_lossy()
-                        .to_string();
-                    format!("file://localhost{}", path)
-                }),
-        );
-        let storage_path = storage_path
-            .map(|s| {
-                Uri::from_str(&s).map_err(|e| {
-                    ConfigError::ParseError(format!("Invalid storage path URL: {}", e))
-                })
-            })
-            .transpose()?;
+        let storage_path = self.resolve_storage_path()?;
 
         // Use the network's default genesis hash if none is specified
         let expected_genesis_hash = self.expected_genesis_hash.clone().or(default_genesis_hash);
@@ -439,8 +443,7 @@ mod tests {
         let test_path =
             async move |input: Option<String>, expected_uri: &str, expected_path: &str| {
                 let config = make_test_config(input);
-                let resolved = config.resolve().await.unwrap();
-                let uri = resolved.storage_path.unwrap();
+                let uri = config.resolve_storage_path().unwrap().unwrap();
                 assert_eq!(uri.to_string(), expected_uri);
                 assert_eq!(uri.path(), expected_path);
             };
@@ -524,13 +527,11 @@ mod tests {
 
         // Verify scheme handling
         let config = make_test_config(Some("https://example.com".to_string()));
-        let resolved = config.resolve().await.unwrap();
-        let uri = resolved.storage_path.unwrap();
+        let uri = config.resolve_storage_path().unwrap().unwrap();
         assert_eq!(uri.scheme_str(), Some("https"));
 
         let config = make_test_config(Some("/local/path".to_string()));
-        let resolved = config.resolve().await.unwrap();
-        let uri = resolved.storage_path.unwrap();
+        let uri = config.resolve_storage_path().unwrap().unwrap();
         assert_eq!(uri.scheme_str(), Some("file"));
 
         env::set_current_dir(original_dir).unwrap();
