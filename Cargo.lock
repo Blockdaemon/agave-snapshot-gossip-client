@@ -139,6 +139,7 @@ dependencies = [
  "solana-gossip",
  "solana-hash",
  "solana-keypair",
+ "solana-serde",
  "solana-signer",
  "solana-streamer",
  "solana-version",
