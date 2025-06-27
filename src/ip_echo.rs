@@ -1,27 +1,52 @@
+// Re-implement solana-net-utils::ip_echo to avoid the dependency on solana-net-utils.
+// Massively stripped down to just the IP echo functionality, does not test client ports.
+// This means that clients behave as if they used --no-port-check.
 use std::net::{IpAddr, SocketAddr, TcpListener};
 
 use anyhow::Result;
 use bincode;
+use bytes::BytesMut;
 use log::{debug, info, warn};
-use serde::de;
 use serde::{Deserialize, Serialize};
+use solana_serde::default_on_eof;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener as TokioTcpListener;
 
 const HEADER_LENGTH: usize = 4;
 const DEFAULT_IP_ECHO_SERVER_THREADS: usize = 2;
 const MAX_PORT_COUNT_PER_MESSAGE: usize = 4;
-const IP_ECHO_SERVER_REQUEST_LENGTH: usize = 16; // 4 tcp ports + 4 udp ports, each u16 (2 bytes)
-const IP_ECHO_SERVER_RESPONSE_LENGTH: usize = HEADER_LENGTH + 23; // 16 ipv6 + 1 enum + 2 u16 + 1 some + 3 overhead
+const IP_ECHO_REQUEST_LENGTH: usize = HEADER_LENGTH + 17; // 4 tcp ports + 4 udp ports, each u16 (2 bytes) + \n
+const IP_ECHO_RESPONSE_LENGTH: usize = HEADER_LENGTH + 23; // 16 ipv6 + 1 enum + 2 u16 + 1 some + 3 overhead
+const CLIENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+// Local macros for bincode operations
+macro_rules! bincode_encode_into {
+    ($buffer:expr, $value:expr) => {
+        bincode::serialize_into($buffer, $value)
+    };
+}
+
+macro_rules! bincode_decode {
+    ($bytes:expr) => {
+        bincode::deserialize($bytes)
+    };
+}
+
+// Local macro for timeout operations
+macro_rules! timeout_operation {
+    ($operation:expr) => {
+        tokio::time::timeout(CLIENT_TIMEOUT, $operation).await??
+    };
+}
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-pub struct IpEchoServerMessage {
+pub struct IpEchoClientRequest {
     tcp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE],
     udp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE],
 }
 
-// IpEchoServerMessage is used by the client to send its port array to the server
-impl IpEchoServerMessage {
+// IpEchoClientRequest is used by the client to send its port array to the server
+impl IpEchoClientRequest {
     pub fn new(tcp_ports: &[u16], udp_ports: &[u16]) -> Self {
         let mut request = Self::default();
         // Copy and pad tcp_ports
@@ -60,19 +85,6 @@ impl IpEchoServerResponse {
     }
 }
 
-pub fn default_on_eof<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: de::Deserializer<'de>,
-    T: Default + Deserialize<'de>,
-{
-    let value = T::deserialize(deserializer);
-    match value {
-        Ok(value) => Ok(value),
-        Err(err) if err.to_string().contains("EOF") => Ok(T::default()),
-        Err(err) => Err(err),
-    }
-}
-
 async fn handle_ip_echo_connection(
     mut socket: tokio::net::TcpStream,
     shred_version: u16,
@@ -81,29 +93,24 @@ async fn handle_ip_echo_connection(
     let peer_ip = peer_addr.ip();
     info!("Connect from {}", peer_ip);
 
-    // Read header
-    let mut header = [0u8; HEADER_LENGTH];
-    if let Err(err) = socket.read_exact(&mut header).await {
-        info!("Failed to read header from {}: {:?}", peer_ip, err);
-        return Err(err.into());
-    }
-
-    // Read request
-    let mut request_bytes = vec![0u8; IP_ECHO_SERVER_REQUEST_LENGTH];
-    if let Err(err) = socket.read_exact(&mut request_bytes).await {
+    // Read header and request
+    let mut bytes = vec![0u8; IP_ECHO_REQUEST_LENGTH];
+    if let Err(err) = socket.read_exact(&mut bytes).await {
         info!("Failed to read request from {}: {:?}", peer_ip, err);
         return Err(err.into());
     }
+    debug!("Server: Request {:?} bytes: {:?}", bytes.len(), bytes);
 
     // Deserialize the request
-    let request: IpEchoServerMessage = bincode::deserialize(&request_bytes)?;
+    let request: IpEchoClientRequest = bincode_decode!(&bytes)?;
     debug!("Message from {}: {:?}", peer_ip, request);
 
-    // Send response
+    // Send header and response
     let response = IpEchoServerResponse::new(peer_ip, Some(shred_version));
-    let mut bytes = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
-    // Write response after header
-    bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &response)?;
+    let mut bytes = vec![0u8; IP_ECHO_RESPONSE_LENGTH];
+    bincode_encode_into!(&mut bytes[HEADER_LENGTH..], &response)?;
+    debug!("Server: Response {:?} bytes: {:?}", bytes.len(), bytes);
+
     if let Err(err) = socket.write_all(&bytes).await {
         info!("Session from {} failed: {:?}", peer_ip, err);
         return Err(err.into());
@@ -148,52 +155,70 @@ pub fn create_ip_echo_server(ip_echo: Option<TcpListener>, shred_version: u16) {
 
 pub async fn ip_echo_client(
     addr: SocketAddr,
-    request: IpEchoServerMessage,
+    request: IpEchoClientRequest,
 ) -> Result<(IpAddr, u16)> {
-    let mut socket = tokio::net::TcpStream::connect(addr).await?;
+    let mut socket = timeout_operation!(tokio::net::TcpStream::connect(addr));
 
-    // Send the 4-byte header
-    socket.write_all(&[0u8; 4]).await?;
+    /*
+    // This is what solana-net-utils::ip_echo_client.rs does
+    // Use same buffer for request and response
+    let mut bytes = BytesMut::with_capacity(IP_ECHO_RESPONSE_LENGTH);
+    // Start with HEADER_LENGTH null bytes to avoid looking like an HTTP GET/POST request
+    bytes.extend_from_slice(&[0u8; HEADER_LENGTH]);
+    bytes.extend_from_slice(&bincode_encode!(&request)?);
+    // End with '\n' to make this request look HTTP-ish and tickle an error response back
+    // from an HTTP server
+    bytes.put_u8(b'\n');
+    */
 
-    // Send the port array message
-    let mut request_bytes = vec![0u8; IP_ECHO_SERVER_REQUEST_LENGTH];
-    bincode::serialize_into(&mut request_bytes, &request).unwrap();
-    socket.write_all(&request_bytes).await?;
+    let mut bytes = vec![0u8; IP_ECHO_REQUEST_LENGTH];
+    bincode_encode_into!(&mut bytes[HEADER_LENGTH..], &request)?;
+    debug!("Client: Request {:?} bytes: {:?}", bytes.len(), bytes);
+    bytes[IP_ECHO_REQUEST_LENGTH - 1] = b'\n'; // Set last byte to newline
+    socket.write_all(&bytes).await?;
+    socket.flush().await?;
 
     // Read the Server Response
-    let mut response_bytes = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
-    socket.read_exact(&mut response_bytes).await?;
-
+    let mut bytes = BytesMut::with_capacity(IP_ECHO_RESPONSE_LENGTH);
+    timeout_operation!(socket.read_buf(&mut bytes));
+    socket.shutdown().await?;
+    debug!(
+        "Client: Response {:?} bytes: {:?}",
+        bytes.len(),
+        bytes.as_ref()
+    );
     // Verify header bytes
-    let header = &response_bytes[..HEADER_LENGTH];
+    let header = &bytes[..HEADER_LENGTH];
     if header != &[0u8; HEADER_LENGTH] {
         return Err(anyhow::anyhow!("Invalid header bytes: {:?}", header));
     }
 
     // Deserialize the response, skipping the header
-    let response: IpEchoServerResponse =
-        bincode::deserialize(&response_bytes[HEADER_LENGTH..]).unwrap();
-    let (address, shred_version) = (response.address(), response.shred_version().unwrap());
+    let response: IpEchoServerResponse = bincode_decode!(&bytes[HEADER_LENGTH..])?;
+    let address = response.address();
+    let shred_version = response.shred_version().unwrap();
     Ok((address, shred_version))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{DEFAULT_GOSSIP_PORT, DEFAULT_RPC_PORT, TESTNET_ENTRYPOINTS};
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use crate::constants::TESTNET_ENTRYPOINTS;
+    use std::net::{IpAddr, SocketAddr};
 
-    // Helper function to create a test request with default ports
-    fn create_test_request() -> IpEchoServerMessage {
-        let tcp_ports = [DEFAULT_RPC_PORT, DEFAULT_GOSSIP_PORT];
-        let udp_ports = [DEFAULT_GOSSIP_PORT];
-        IpEchoServerMessage::new(&tcp_ports, &udp_ports)
+    // Initialize logger for tests
+    fn init_logger() {
+        let _ = env_logger::try_init();
+    }
+
+    // Helper function to create a test request with no ports
+    fn create_test_request() -> IpEchoClientRequest {
+        IpEchoClientRequest::default()
     }
 
     // Helper function to create a test response
-    fn create_test_response(shred_version: u16) -> IpEchoServerResponse {
-        IpEchoServerResponse::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), Some(shred_version))
+    fn create_test_response() -> IpEchoServerResponse {
+        IpEchoServerResponse::new(IpAddr::from([127, 0, 0, 1]), Some(42))
     }
 
     // Helper function to setup a test server that handles a single connection
@@ -218,7 +243,9 @@ mod tests {
     }
 
     #[tokio::test]
+    // Test the ip_echo_client() api with a local test server
     async fn test_ip_echo_client() {
+        init_logger();
         let shred_version = 42;
         let local_addr = setup_test_server(move |socket| {
             Box::pin(handle_ip_echo_connection(socket, shred_version))
@@ -228,12 +255,14 @@ mod tests {
         let request = create_test_request();
         let (address, version) = ip_echo_client(local_addr, request).await.unwrap();
 
-        assert_eq!(address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(address, IpAddr::from([127, 0, 0, 1]));
         assert_eq!(version, shred_version);
     }
 
     #[tokio::test]
+    // Test with a real remote entrypoint server
     async fn test_ip_echo_client_with_entrypoint() {
+        init_logger();
         let entrypoint = TESTNET_ENTRYPOINTS[0];
         let (host, port) = entrypoint.split_once(':').unwrap();
         let port = port.parse::<u16>().unwrap();
@@ -260,50 +289,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_ip_echo_client_header() {
-        let shred_version = 42;
-        let local_addr = setup_test_server(move |socket| {
-            Box::pin(handle_ip_echo_connection(socket, shred_version))
-        })
-        .await;
-
-        let request = create_test_request();
-        let mut stream = tokio::net::TcpStream::connect(local_addr).await.unwrap();
-
-        let mut bytes = vec![0u8; IP_ECHO_SERVER_REQUEST_LENGTH];
-        bincode::serialize_into(&mut bytes, &request).unwrap();
-        stream.write_all(&bytes).await.unwrap();
-
-        // Read response
-        let mut response_bytes = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
-        stream.read_exact(&mut response_bytes).await.unwrap();
-
-        // Verify header
-        let header = &response_bytes[..HEADER_LENGTH];
-        println!("Response header bytes: {:?}", header);
-        assert_eq!(header, &[0u8; HEADER_LENGTH], "Header should be all zeros");
-
-        // Deserialize the response, skipping the header
-        let response: IpEchoServerResponse =
-            bincode::deserialize(&response_bytes[HEADER_LENGTH..]).unwrap();
-        assert_eq!(response.address, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-        assert_eq!(response.shred_version, Some(shred_version));
-    }
-
-    #[tokio::test]
     async fn test_ip_echo_client_rejects_invalid_header() {
-        let shred_version = 42;
+        init_logger();
         let local_addr = setup_test_server(move |mut socket| {
             Box::pin(async move {
-                let mut header = [0u8; HEADER_LENGTH];
-                socket.read_exact(&mut header).await.unwrap();
-                let mut request_bytes = vec![0u8; IP_ECHO_SERVER_REQUEST_LENGTH];
-                socket.read_exact(&mut request_bytes).await.unwrap();
+                let mut bytes = vec![0u8; IP_ECHO_REQUEST_LENGTH];
+                socket.read_exact(&mut bytes).await.unwrap();
+                println!("Server: Request {:?} bytes: {:?}", bytes.len(), bytes);
 
-                let response = create_test_response(shred_version);
-                let mut bytes = vec![0u8; IP_ECHO_SERVER_RESPONSE_LENGTH];
+                let mut bytes = vec![0u8; IP_ECHO_RESPONSE_LENGTH];
+                // Set the header to something invalid
                 bytes[..HEADER_LENGTH].copy_from_slice(&[1u8; HEADER_LENGTH]);
-                bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &response).unwrap();
+                // Set response
+                let response = create_test_response();
+                bincode_encode_into!(&mut bytes[HEADER_LENGTH..], &response).unwrap();
+                println!("Server: Response {:?} bytes: {:?}", bytes.len(), bytes);
                 socket.write_all(&bytes).await.unwrap();
                 Ok(())
             })
@@ -312,6 +312,7 @@ mod tests {
 
         let request = create_test_request();
         let result = ip_echo_client(local_addr, request).await;
+        println!("Result: {:?}", result);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -321,20 +322,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_ip_echo_server() {
+        init_logger();
         // Start the server
-        let server_addr = SocketAddr::from(([127, 0, 0, 1], 0));
+        let server_ip = IpAddr::from([127, 0, 0, 1]);
+        let server_addr = SocketAddr::from((server_ip, 0));
         let tcp_listener = TokioTcpListener::bind(server_addr).await.unwrap();
-        let server_addr = tcp_listener.local_addr().unwrap();
+        let listener_addr = tcp_listener.local_addr().unwrap();
         let shred_version = 12345;
         create_ip_echo_server(Some(tcp_listener.into_std().unwrap()), shred_version);
 
         // Use our client to connect and get the response
-        let (address, version) = ip_echo_client(server_addr, create_test_request())
+        let (address, version) = ip_echo_client(listener_addr, create_test_request())
             .await
             .unwrap();
 
         // Verify the response
-        assert_eq!(address, IpAddr::from([127, 0, 0, 1]));
+        assert_eq!(address, server_ip);
         assert_eq!(version, shred_version);
     }
 }

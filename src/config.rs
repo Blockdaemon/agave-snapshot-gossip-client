@@ -147,7 +147,7 @@ impl Config {
 
         // Try each entrypoint with IP echo client
         for entrypoint in entrypoints {
-            let request = crate::ip_echo::IpEchoServerMessage::new(&[], &[]);
+            let request = crate::ip_echo::IpEchoClientRequest::new(&[], &[]);
             info!("IP echo request to {}: {:?}", entrypoint, request);
             match crate::ip_echo::ip_echo_client(*entrypoint, request).await {
                 Ok((ip, shred_version)) => {
