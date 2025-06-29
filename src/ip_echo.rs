@@ -251,7 +251,10 @@ mod tests {
             }
             Err(err) => {
                 println!("Failed to connect to entrypoint {}: {:?}", server_addr, err);
-                // Don't fail the test since entrypoints might be down
+                // Only fail the test if not in CI, since entrypoints might be down in CI
+                if std::env::var("CI").is_err() {
+                    panic!("Failed to connect to entrypoint {}: {:?}", server_addr, err);
+                }
             }
         }
     }
