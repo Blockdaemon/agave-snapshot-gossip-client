@@ -19,16 +19,17 @@ const IP_ECHO_REQUEST_LENGTH: usize = HEADER_LENGTH + 17; // 4 tcp ports + 4 udp
 const IP_ECHO_RESPONSE_LENGTH: usize = HEADER_LENGTH + 23; // 16 ipv6 + 1 enum + 2 u16 + 1 some + 3 overhead
 const CLIENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
-// Local macros for bincode operations
-macro_rules! bincode_encode_into {
+// Local macros for bincode operations - v1.x compatible
+macro_rules! bincode_encode {
     ($buffer:expr, $value:expr) => {
-        bincode::serialize_into($buffer, $value)
+        bincode::serde::encode_into_slice($value, $buffer, bincode::config::legacy())
     };
 }
 
 macro_rules! bincode_decode {
     ($bytes:expr) => {
-        bincode::deserialize($bytes)
+        // discard the length of the bytes read and just return the decoded value
+        bincode::serde::decode_from_slice($bytes, bincode::config::legacy()).map(|(value, _)| value)
     };
 }
 
@@ -108,7 +109,7 @@ async fn handle_ip_echo_connection(
     // Send header and response
     let response = IpEchoServerResponse::new(peer_ip, Some(shred_version));
     let mut bytes = vec![0u8; IP_ECHO_RESPONSE_LENGTH];
-    bincode_encode_into!(&mut bytes[HEADER_LENGTH..], &response)?;
+    bincode_encode!(&mut bytes[HEADER_LENGTH..], &response)?;
     debug!("Server: Response {:?} bytes: {:?}", bytes.len(), bytes);
 
     if let Err(err) = socket.write_all(&bytes).await {
@@ -172,7 +173,7 @@ pub async fn ip_echo_client(
     */
 
     let mut bytes = vec![0u8; IP_ECHO_REQUEST_LENGTH];
-    bincode_encode_into!(&mut bytes[HEADER_LENGTH..], &request)?;
+    bincode_encode!(&mut bytes[HEADER_LENGTH..], &request)?;
     debug!("Client: Request {:?} bytes: {:?}", bytes.len(), bytes);
     bytes[IP_ECHO_REQUEST_LENGTH - 1] = b'\n'; // Set last byte to newline
     socket.write_all(&bytes).await?;
@@ -302,7 +303,7 @@ mod tests {
                 bytes[..HEADER_LENGTH].copy_from_slice(&[1u8; HEADER_LENGTH]);
                 // Set response
                 let response = create_test_response();
-                bincode_encode_into!(&mut bytes[HEADER_LENGTH..], &response).unwrap();
+                bincode_encode!(&mut bytes[HEADER_LENGTH..], &response).unwrap();
                 println!("Server: Response {:?} bytes: {:?}", bytes.len(), bytes);
                 socket.write_all(&bytes).await.unwrap();
                 Ok(())

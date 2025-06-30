@@ -36,8 +36,7 @@ tokio-util = "*"
 
 # Everything else
 anyhow = "~1"
-# FIXME: upgrade to 2.x?
-bincode = "~1"
+bincode = { version = "~2", features = ["serde"] }
 chrono = "*"
 clap = { version = "~4", features = ["derive"] }
 dns-lookup = "~2"
