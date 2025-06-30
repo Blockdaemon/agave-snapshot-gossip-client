@@ -1,3 +1,19 @@
+agave-snapshot-gossip-client (0.2.0) unstable; urgency=medium
+
+  * Do not advertise pubsub port, update README
+  * Support HTTP HEAD requests
+  * Cosmetic: add network example to debian default config
+  * Cosmetic: Update example-config.toml
+  * Add HEAD support to local storage and associated unit testing
+  * Split out storage resolver from resolve() so it doesn't need to call ip_echo
+  * Only ignore E2E ip-echo test in CI
+  * ip_echo.rs: Complete rewrite to more closely match agave itself
+  * bincode 2.x
+  * cargo(deps): bump solana-gossip from 2.3.1 to 2.3.2
+  * Merge pull request #72 from Blockdaemon/dependabot/cargo/solana-gossip-2.3.2
+
+ -- Nye Liu <nye@blockdaemon.com>  Mon, 30 Jun 2025 11:13:57 -0700
+
 agave-snapshot-gossip-client (0.1.9) unstable; urgency=medium
 
   * docs(#53): Document plan for gossip high resource usage mitigation
