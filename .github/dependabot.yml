@@ -18,3 +18,7 @@ updates:
     commit-message:
       prefix: "cargo"
       include: "scope"
+    target-branch: "v2.3"
+    ignore:
+      - dependency-name: "solana-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
