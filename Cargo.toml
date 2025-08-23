@@ -19,7 +19,7 @@ path = "src/main.rs"
 # upstream solana dependencies
 solana-gossip = "~2.3"
 solana-hash = "~2.3"
-solana-keypair = "~2.2"
+solana-keypair = "~3.0"
 solana-serde = "~2.2"
 solana-signer = "~2.2"
 solana-streamer = "~2.3"
