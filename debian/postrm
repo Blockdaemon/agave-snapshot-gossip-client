@@ -5,8 +5,8 @@ case "$1" in
     purge)
         # Remove user, group, and config files on purge
         echo "Purging gossip-client package..."
-        deluser --system --quiet gossip-client 2>/dev/null || true
-        delgroup --system --quiet gossip-client 2>/dev/null || true
+        /usr/sbin/userdel gossip-client 2>/dev/null || true
+        /usr/sbin/groupdel gossip-client 2>/dev/null || true
 
         # Remove non-json files from config directory
         if [ -d "/etc/gossip-client" ]; then

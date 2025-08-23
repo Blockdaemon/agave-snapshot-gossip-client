@@ -48,7 +48,7 @@ jobs:
           # Use the validated DEB_FILE path and input filename
           docker cp "${{ steps.find_deb.outputs.deb_file }}" test-debian:/tmp/
           # Install package and check dependencies
-          docker exec test-debian bash -c "apt-get update && apt-get install -y --no-install-recommends wget"
+          docker exec test-debian bash -c "apt-get update && apt-get install -y --no-install-recommends wget systemd"
           # Use the found filename
           docker exec test-debian bash -c "dpkg -i /tmp/${{ steps.find_deb.outputs.deb_filename }}"
           docker exec test-debian bash -c "apt-get install -fy --no-install-recommends"

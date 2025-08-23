@@ -5,12 +5,12 @@ case "$1" in
     install|upgrade)
         # Create gossip-client group if it doesn't exist
         if ! getent group gossip-client >/dev/null; then
-            addgroup --system gossip-client
+            groupadd --system gossip-client
         fi
 
         # Create gossip-client user if it doesn't exist
         if ! getent passwd gossip-client >/dev/null; then
-            adduser --system --ingroup gossip-client --no-create-home --disabled-password gossip-client
+            useradd --system --gid gossip-client --no-create-home --shell /bin/false gossip-client
         fi
         ;;
 
