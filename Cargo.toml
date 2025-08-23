@@ -39,7 +39,7 @@ anyhow = "~1"
 bincode = { version = "~2", features = ["serde"] }
 chrono = "*"
 clap = { version = "~4", features = ["derive"] }
-dns-lookup = "~2"
+dns-lookup = "~3"
 env_logger = "*"
 get_if_addrs = "*"
 hex = "*"
