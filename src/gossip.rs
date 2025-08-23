@@ -300,8 +300,9 @@ fn make_gossip_node(
     }
 
     let cluster_info = Arc::new(cluster_info);
+    let gossip_sockets = Arc::new([gossip_socket]);
     let gossip_service =
-        GossipService::new(&cluster_info, None, gossip_socket, None, true, None, exit);
+        GossipService::new(&cluster_info, None, gossip_sockets, None, true, None, exit);
 
     (gossip_service, cluster_info)
 }
