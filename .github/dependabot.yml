@@ -1,5 +1,13 @@
 version: 2
 updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "actions"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -7,6 +15,17 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "cargo"
+      include: "scope"
 
   - package-ecosystem: "cargo"
     directory: "/"
