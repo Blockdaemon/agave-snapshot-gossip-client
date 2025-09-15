@@ -41,16 +41,16 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
     debug!("Path: {}", path);
 
     // Build request based on method
-    let mut request_builder = match req.method() {
-        &http::Method::GET => client.get(format!("{}{}", base_uri, path)),
-        &http::Method::POST => client.post(format!("{}{}", base_uri, path)),
-        &http::Method::PUT => client.put(format!("{}{}", base_uri, path)),
-        &http::Method::DELETE => client.delete(format!("{}{}", base_uri, path)),
-        &http::Method::HEAD => client.head(format!("{}{}", base_uri, path)),
-        &http::Method::OPTIONS => {
+    let mut request_builder = match *req.method() {
+        http::Method::GET => client.get(format!("{}{}", base_uri, path)),
+        http::Method::POST => client.post(format!("{}{}", base_uri, path)),
+        http::Method::PUT => client.put(format!("{}{}", base_uri, path)),
+        http::Method::DELETE => client.delete(format!("{}{}", base_uri, path)),
+        http::Method::HEAD => client.head(format!("{}{}", base_uri, path)),
+        http::Method::OPTIONS => {
             client.request(reqwest::Method::OPTIONS, format!("{}{}", base_uri, path))
         }
-        &http::Method::PATCH => client.patch(format!("{}{}", base_uri, path)),
+        http::Method::PATCH => client.patch(format!("{}{}", base_uri, path)),
         _ => {
             return Response::builder()
                 .status(StatusCode::METHOD_NOT_ALLOWED)

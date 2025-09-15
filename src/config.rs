@@ -109,7 +109,6 @@ impl Config {
                 error!("DNS lookup failed for host '{}': {}", host, e);
                 ConfigError::DnsLookupError(e.to_string())
             })?
-            .into_iter()
             .next()
             .ok_or_else(|| {
                 error!("No IP addresses found for host '{}'", host);

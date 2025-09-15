@@ -7,7 +7,7 @@ fn main() {
 
     // Get the git SHA
     let output = Command::new("git")
-        .args(&["rev-parse", "HEAD"])
+        .args(["rev-parse", "HEAD"])
         .output()
         .expect("Failed to get git SHA");
     let git_sha = String::from_utf8(output.stdout).expect("Failed to parse git SHA");
@@ -15,7 +15,7 @@ fn main() {
 
     // Get the git tag
     let tag_output = Command::new("git")
-        .args(&["describe", "--tags", "--always"])
+        .args(["describe", "--tags", "--always"])
         .output()
         .expect("Failed to get git tag");
     let git_tag = String::from_utf8(tag_output.stdout).expect("Failed to parse git tag");

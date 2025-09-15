@@ -212,14 +212,14 @@ async fn handle_rpc_request(
     let method = match rpc_req.get("method").and_then(|m| m.as_str()) {
         Some(m) => m,
         None => {
-            let id = rpc_req.get("id").map(|v| v.clone());
+            let id = rpc_req.get("id").cloned();
             return jsonrpc_error(-32600, "Invalid request", id, StatusCode::BAD_REQUEST);
         }
     };
 
     info!("Processing RPC method: {} from {}", method, peer_ip);
 
-    let id = rpc_req.get("id").map(|v| v.clone());
+    let id = rpc_req.get("id").cloned();
 
     // Handle different RPC methods
     let result = match method {

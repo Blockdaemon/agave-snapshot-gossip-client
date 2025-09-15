@@ -78,7 +78,7 @@ impl LocalStorage {
         }
     }
 
-    fn guess_content_type(path: &PathBuf) -> &'static str {
+    fn guess_content_type(path: &std::path::Path) -> &'static str {
         match path.extension().and_then(|ext| ext.to_str()) {
             Some("json") => "application/json",
             Some("txt") => "text/plain",
