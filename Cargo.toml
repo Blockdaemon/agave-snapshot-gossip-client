@@ -67,8 +67,8 @@ snapshot_gossip_client = { path = ".", package = "agave-snapshot-gossip-client" 
 axum-test = "*"
 bs58 = "*"
 hyper = "~1"
+mockito = "*"
 tempfile = "~3"
-wiremock = "*"
 
 [profile.release]
 opt-level = 3
