@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 # upstream solana dependencies
-solana-gossip = "*"
+solana-gossip = "~3.0"
 solana-hash = "*"
 solana-keypair = "*"
 solana-serde = "*"
@@ -68,7 +68,7 @@ axum-test = "*"
 bs58 = "*"
 hyper = "~1"
 tempfile = "~3"
-wiremock = "*"
+mockito = "*"
 
 [profile.release]
 opt-level = 3

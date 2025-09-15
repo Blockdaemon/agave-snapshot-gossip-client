@@ -4,7 +4,6 @@
 use std::net::{IpAddr, SocketAddr, TcpListener};
 
 use anyhow::Result;
-use bincode;
 use bytes::BytesMut;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
@@ -136,7 +135,6 @@ pub fn create_ip_echo_server(ip_echo: Option<TcpListener>, shred_version: u16) {
         for _ in 0..DEFAULT_IP_ECHO_SERVER_THREADS {
             let tcp_listener = TokioTcpListener::from_std(tcp_listener.try_clone().unwrap())
                 .expect("Failed to convert std::TcpListener");
-            let shred_version = shred_version;
             tokio::spawn(async move {
                 loop {
                     match tcp_listener.accept().await {
@@ -190,7 +188,7 @@ pub async fn ip_echo_client(
     );
     // Verify header bytes
     let header = &bytes[..HEADER_LENGTH];
-    if header != &[0u8; HEADER_LENGTH] {
+    if header != [0u8; HEADER_LENGTH] {
         return Err(anyhow::anyhow!("Invalid header bytes: {:?}", header));
     }
 

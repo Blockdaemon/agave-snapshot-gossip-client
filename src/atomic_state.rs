@@ -15,17 +15,23 @@ pub struct AtomicState {
     public_key: Arc<RwLock<String>>,
 }
 
+impl Default for AtomicState {
+    fn default() -> Self {
+        Self {
+            num_peers: Arc::new(AtomicI64::new(0)),
+            shred_version: Arc::new(AtomicU16::new(0)),
+            public_key: Arc::new(RwLock::new(String::new())),
+        }
+    }
+}
+
 impl AtomicState {
     /// Creates a new `AtomicState` instance with default values.
     ///
     /// - `num_peers` and `shred_version` start at 0.
     /// - `public_key` starts as an empty string.
     pub fn new() -> Self {
-        Self {
-            num_peers: Arc::new(AtomicI64::new(0)),
-            shred_version: Arc::new(AtomicU16::new(0)),
-            public_key: Arc::new(RwLock::new(String::new())),
-        }
+        Self::default()
     }
 
     /// Sets the node's public key.

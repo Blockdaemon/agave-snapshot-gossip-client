@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use clap::Parser;
-use env_logger;
 use igd::PortMappingProtocol;
 use log::{error, info, warn};
 

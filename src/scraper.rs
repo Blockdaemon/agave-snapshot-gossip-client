@@ -16,6 +16,9 @@ use crate::constants::{
 const CACHE_DURATION: Duration = Duration::from_secs(SCRAPER_CACHE_TTL_SECS);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(SCRAPER_REQUEST_TIMEOUT_SECS);
 
+// Type aliases for complex types
+type SnapshotHashesConvertResult = (u64, String, Vec<(u64, String)>);
+
 #[derive(Debug)]
 pub enum ScraperError {
     NetworkError(String),
@@ -42,15 +45,13 @@ impl std::fmt::Display for ScraperError {
 }
 
 impl SnapshotHashes {
-    pub fn convert_snapshot_hashes(
-        &self,
-    ) -> Result<(u64, String, Vec<(u64, String)>), ScraperError> {
+    pub fn convert_snapshot_hashes(&self) -> Result<SnapshotHashesConvertResult, ScraperError> {
         Ok((
             self.full.0,
             self.full.1.clone(),
             self.incremental
                 .as_ref()
-                .map_or_else(Vec::new, |(slot, hash)| vec![(slot.clone(), hash.clone())]),
+                .map_or_else(Vec::new, |(slot, hash)| vec![(*slot, hash.clone())]),
         ))
     }
 }

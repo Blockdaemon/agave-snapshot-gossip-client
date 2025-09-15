@@ -15,6 +15,9 @@ use solana_keypair::{read_keypair_file, Keypair};
 use solana_signer::Signer;
 use solana_streamer::socket::SocketAddrSpace;
 
+// Type aliases for complex types
+type SnapshotHashesResult = (u64, Hash, Vec<(u64, Hash)>);
+
 // Our local crates
 use super::config::ResolvedConfig;
 use super::ip_echo;
@@ -108,9 +111,7 @@ trait GossipMonitor {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
-fn decode_snapshot_hashes(
-    snapshot_hashes: &SnapshotHashes,
-) -> Result<(u64, Hash, Vec<(u64, Hash)>)> {
+fn decode_snapshot_hashes(snapshot_hashes: &SnapshotHashes) -> Result<SnapshotHashesResult> {
     let (full_slot, full_hash, incremental_hashes) = snapshot_hashes
         .convert_snapshot_hashes()
         .map_err(|e| anyhow::anyhow!("Failed to convert snapshot hashes: {}", e))?;
@@ -244,7 +245,7 @@ fn make_gossip_node(
         */
         let (mut node, gossip_socket, ip_echo) = ClusterInfo::gossip_node(
             keypair.pubkey(),
-            &gossip_socket, // ip portion used to set contact info, IP hardcoded to UNSPECIFIED
+            gossip_socket, // ip portion used to set contact info, IP hardcoded to UNSPECIFIED
             shred_version.unwrap_or(0),
         );
 
@@ -290,7 +291,7 @@ fn make_gossip_node(
     cluster_info.set_entrypoints(
         entrypoints
             .iter()
-            .map(|addr| ContactInfo::new_gossip_entry_point(addr))
+            .map(ContactInfo::new_gossip_entry_point)
             .collect(),
     );
 

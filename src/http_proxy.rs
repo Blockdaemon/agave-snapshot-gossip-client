@@ -41,16 +41,16 @@ pub async fn proxy_to(target_uri: Uri, req: Request<Body>) -> Response<Body> {
     debug!("Path: {}", path);
 
     // Build request based on method
-    let mut request_builder = match req.method() {
-        &http::Method::GET => client.get(format!("{}{}", base_uri, path)),
-        &http::Method::POST => client.post(format!("{}{}", base_uri, path)),
-        &http::Method::PUT => client.put(format!("{}{}", base_uri, path)),
-        &http::Method::DELETE => client.delete(format!("{}{}", base_uri, path)),
-        &http::Method::HEAD => client.head(format!("{}{}", base_uri, path)),
-        &http::Method::OPTIONS => {
+    let mut request_builder = match *req.method() {
+        http::Method::GET => client.get(format!("{}{}", base_uri, path)),
+        http::Method::POST => client.post(format!("{}{}", base_uri, path)),
+        http::Method::PUT => client.put(format!("{}{}", base_uri, path)),
+        http::Method::DELETE => client.delete(format!("{}{}", base_uri, path)),
+        http::Method::HEAD => client.head(format!("{}{}", base_uri, path)),
+        http::Method::OPTIONS => {
             client.request(reqwest::Method::OPTIONS, format!("{}{}", base_uri, path))
         }
-        &http::Method::PATCH => client.patch(format!("{}{}", base_uri, path)),
+        http::Method::PATCH => client.patch(format!("{}{}", base_uri, path)),
         _ => {
             return Response::builder()
                 .status(StatusCode::METHOD_NOT_ALLOWED)
@@ -130,8 +130,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::Method;
     use axum::http::Request;
-    use env_logger;
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use mockito::Server;
 
     #[tokio::test]
     async fn test_proxy_user_agent() {
@@ -139,49 +138,35 @@ mod tests {
         let _ = env_logger::try_init();
 
         // Start a mock server
-        let mock_server = MockServer::start().await;
+        let mut server = Server::new_async().await;
 
         // Set up the mock to expect a request with our user agent
-        Mock::given(wiremock::matchers::method("GET"))
-            .and(wiremock::matchers::path("/test"))
-            .and(wiremock::matchers::header(
-                "User-Agent",
-                SOLANA_VALIDATOR_USER_AGENT,
-            ))
-            .respond_with(ResponseTemplate::new(200).set_body_string("OK"))
-            .expect(1)
-            .mount(&mock_server)
+        let _mock = server
+            .mock("GET", "/test")
+            .match_header("User-Agent", SOLANA_VALIDATOR_USER_AGENT)
+            .with_status(200)
+            .with_body("OK")
+            .create_async()
             .await;
 
         // Create a test request
         let req = Request::builder()
             .method(Method::GET)
-            .uri(format!("{}/test", mock_server.uri()))
+            .uri(format!("{}/test", server.url()))
             .header(header::USER_AGENT, "unknown") // set a "bad" user-agent to test that it is overridden
             .body(Body::empty())
             .unwrap();
 
         // Create a test URI (just the base URI)
-        let target_uri = mock_server.uri().parse::<Uri>().unwrap();
+        let target_uri = server.url().parse::<Uri>().unwrap();
 
         // Call the proxy function
         let response = proxy_to(target_uri, req).await;
 
-        // Print path and headers from received requests
-        let user_agent = wiremock::http::HeaderName::from_bytes(b"user-agent").unwrap();
-        let received_requests = mock_server
-            .received_requests()
-            .await
-            .expect("No requests received");
-        for request in received_requests {
-            println!("Request path {}", request.url.path());
-            println!(
-                "Request user-agent: {}",
-                request.headers.get(&user_agent).unwrap().to_str().unwrap()
-            );
-        }
-
         // The response should be successful
         assert_eq!(response.status(), StatusCode::OK);
+
+        // Verify the mock was called
+        _mock.assert_async().await;
     }
 }

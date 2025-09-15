@@ -5,7 +5,6 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use get_if_addrs;
 use igd::{PortMappingProtocol, SearchOptions};
 use log::{debug, info};
 
