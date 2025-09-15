@@ -103,7 +103,7 @@ jobs:
       # Creates release with specific artifacts:
       # Upload all files from the release_assets directory
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: release_assets/*
           generate_release_notes: true
