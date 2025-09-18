@@ -1,3 +1,11 @@
+agave-snapshot-gossip-client (0.2.1) unstable; urgency=medium
+
+  * debian: preinst, postrm: Debian no longer has add/del/user/group use user/group/add/del
+  * agave 3.0.0
+  * pin agave-gossip 3.0, wiremock->mockito, fix lint errors
+
+ -- Nye Liu <nye@blockdaemon.com>  Thu, 18 Sep 2025 00:29:21 -0700
+
 agave-snapshot-gossip-client (0.2.0) unstable; urgency=medium
 
   * Do not advertise pubsub port, update README
