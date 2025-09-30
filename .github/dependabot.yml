@@ -26,6 +26,13 @@ updates:
     commit-message:
       prefix: "cargo"
       include: "scope"
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
 
   - package-ecosystem: "cargo"
     directory: "/"
@@ -40,4 +47,11 @@ updates:
     target-branch: "v2.3"
     ignore:
       - dependency-name: "solana-*"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
+    groups:
+      rust-dependencies-v2.3:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
