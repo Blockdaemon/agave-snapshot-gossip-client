@@ -36,7 +36,6 @@ impl StunClient {
                 error!("Failed to resolve STUN server hostname: {}", e);
                 std::process::exit(1);
             })
-            .into_iter()
             .find(|ip| ip.is_ipv4())
             .unwrap_or_else(|| {
                 error!("No IPv4 addresses found for STUN server");
