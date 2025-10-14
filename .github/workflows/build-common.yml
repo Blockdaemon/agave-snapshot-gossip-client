@@ -82,6 +82,13 @@ jobs:
           cache-targets: true
           cache-all-crates: true
 
+      - name: Install cargo-cache
+        run: cargo install cargo-cache
+
+      - name: Clean Cargo cache
+        if: always()
+        run: cargo cache --autoclean
+
       - name: Get timestamp
         id: get_timestamp
         run: echo "timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
