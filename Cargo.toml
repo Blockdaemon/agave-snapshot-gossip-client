@@ -17,13 +17,18 @@ path = "src/main.rs"
 
 [dependencies]
 # upstream solana dependencies
-solana-gossip = "~3.0"
-solana-hash = "*"
+solana-gossip = { version = "3", features = ["agave-unstable-api"] }
+solana-hash = { version = "=3.0.0", features = ["serde"] }
 solana-keypair = "*"
 solana-serde = "*"
 solana-signer = "*"
 solana-streamer = "*"
 solana-version = "*"
+# Pin dependencies to 3.0.0 to use solana-hash 3.0.0 (matches solana-accounts-db requirement)
+solana-sysvar = "=3.0.0"
+solana-blake3-hasher = "=3.0.0"
+solana-keccak-hasher = "=3.0.0"
+solana-epoch-rewards-hasher = "=3.0.0"
 
 # for rpc.rs, http_proxy.rs, and local_storage.rs
 bytes = "~1"
@@ -43,6 +48,7 @@ dns-lookup = "~3"
 env_logger = "*"
 get_if_addrs = "*"
 hex = "*"
+home = "=0.5.11" # Rust 1.86.0
 igd = "*"
 lazy_static = "~1"
 log = "*"
