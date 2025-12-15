@@ -45,7 +45,7 @@ jobs:
 
       - name: Download tarball artifact
         # This downloads the build-output artifact containing versionless tar.gz and zip
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: build-output-linux-x86_64
           path: release_assets
@@ -54,7 +54,7 @@ jobs:
       # - Debian package: debian-package artifact
       # Note: This will be downloaded directly to release_assets/
       - name: Download Debian package(s)
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: debian-packages
           path: release_assets
