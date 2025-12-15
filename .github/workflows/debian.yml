@@ -84,7 +84,7 @@ jobs:
           mv ../*.deb artifacts/
 
       - name: Upload Debian package
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: debian-packages
           path: artifacts/*.deb

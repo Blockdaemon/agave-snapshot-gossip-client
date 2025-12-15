@@ -152,7 +152,7 @@ jobs:
       # Upload only the versionless tar.gz bundle
       - name: Upload build artifact (tar.gz)
         if: ${{ inputs.upload_artifacts }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build-output-linux-x86_64 # Fixed artifact name
           # Reference step output
